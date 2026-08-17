@@ -1,0 +1,11 @@
+[tool.pylint.typecheck]
+# extension-pkg-allow-list = ["polyscope", "polyscope.imgui"]
+
+[tool.pylint.format]
+max-line-length = 200   # or bump to taste
+
+[tool.pylint."messages control"]
+disable = [
+    "broad-exception-caught",  # the ps.init() fallback is an intentional catch-all
+    # "no-member",   # Pylance owns member checking; Pylint can't introspect compiled polyscope
+]
