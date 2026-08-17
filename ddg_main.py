@@ -26,7 +26,7 @@ def main(pre_load = None):
 
     app_state = ddg_p.polyscope_app_init(pre_load = pre_load)
 
-    return app_state["Meshes"]
+    return app_state
 
 ### Main File ###
 if __name__ == "__main__":

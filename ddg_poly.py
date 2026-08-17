@@ -18,49 +18,12 @@ TIMED = ddg_obj.TIMED
 MEMORY = ddg_obj.MEMORY
 ERR = ddg_obj.ERR
 
-# TODO: Make app_state a data class to enforce
-""" app_state = {
-        "App Settings": {# Direct control of initialization settings for polyscope
-            "APP_NAME": "Discreate Differential Geometry Toolkit",
-            "APP_VERSION": "0.0.1_beta",
-            "APP_DEBUG": True,
-            "PS_VERBOSITY": 5,
-            "PS_BACKEND": "auto",
-            "PS_MAX_FRAMERATE": 59,
-            "PS_GIVE_FOCUS_ON_SHOW": True,
-            "PS_UP_DIR": "z_up",
-            "PS_SET_ALWAYS_REDRAW": True,
-            "PS_SET_OPEN_IMGUI_WINDOW_FOR_USER_CALLBACK": True,
-            },
-        ## UI Operations
-        "Operations": {},
-        ## Global store of meshes in case we want to acumulate
-        "Meshes": {}, # [Proposal] Meshes = {"Name 1": {"MeshObject": MeshObject, "Transforms":{"Parent": Some Object, "Childs": {{"Name1":OBJ, ....}} }} }
-        "Transforms": {}, # Global store of transforms, these are meaningful external (not object related transfomrs)
-        "UI State": {
-            "Auto Update": False,
-            "Selected IDX": 0,
-            "Save Mesh Name": "Default Mesh Name"
-        },
-        "Reference Vectors": {
-            "UP": np.array([0.0,0.0,1.0]), # +Z-axis
-            "DOWN": -1 * np.array([0.0,0.0,1.0]), # -Z-axis
-            "RIGHT": np.array([1.0,0.0,0.0]), # +X-axis
-            "LEFT": -1.0 * np.array([1.0,0.0,0.0]), # -X-axis
-            "BACK": np.array([0.0,1.0,0.0]), # +Y-axis
-            "FRONT": -1.0 * np.array([0.0,1.0,0.0]), # -Y-axis
-            "FLOOR": np.array([0.0,0.0,1.0]), # Direction of the floor
-        },
-        "Secondary Objects":{ # things that might be incidentally usefull
-            "Source": np.array([4500.0,4500.0,4500.0]), # another thing to track locations will use to check direction from some other vector
-        }
-    } """
-
 class App():
     """
     App class to generate all app settings and store memory, enforce grammart and whatever else
 
-    - ps_settings: Contains all configurations for the polyscope initialization
+    - app_settings: Contains configurations for app level utilization
+    - ps_settings: Contains configurations for the polyscope initialization
     - opperations: Contains the button creation storage
     - meshes: Memory storage for the loaded meshes
     - transforms: Memory storage for a trasnform tree
@@ -88,6 +51,7 @@ class App():
         self.transforms = {}
         self.ui_state = {
             "Auto Update": False,
+            "Selected Name": "<none>",
             "Selected IDX": 0,
             "Save Mesh Name": "Default Mesh Name"
             }
@@ -127,7 +91,7 @@ def load_mesh(file_path = None):
     """
     Takes a filepath and loads it to memory
     """
-    if default_app.ps_settings["APP_DEBUG"]:
+    if default_app.app_settings["APP_DEBUG"]:
         print("Loading a mesh")
 
     ## Open a window and retrieve a file path, use it to load into a mesh object
@@ -150,16 +114,15 @@ def load_mesh(file_path = None):
 
         ps.reset_camera_to_home_view()
 
-        if app_state["App Settings"]["APP_DEBUG"]:
+        if default_app.app_settings["APP_DEBUG"]:
             print(f"Loaded a mesh: {name}")
-            m = app_state["Meshes"][app_state["UI State"]["Selected Name"]]
-            g = m.vertex_vertex_adjacency
-            print(f"verts={m.NumVerts}  faces={m.NumFaces}")
+            g = mesh_object.vertex_vertex_adjacency
+            print(f"verts={mesh_object.NumVerts}  faces={mesh_object.NumFaces}")
             print(f"vertex adjacency (sparse): shape {g.shape}, nnz {g.nnz}, {g.data.nbytes/1e6:.1f} MB")
-            attributes = vars(m) # TODO : Change to a  method call later
+            attributes = vars(mesh_object) # TODO : Change to a  method call later
             print("These are the attributes ", attributes)
             for attr in attributes:
-                o = getattr(m, attr, None)
+                o = getattr(mesh_object, attr, None)
                 if hasattr(o, "nbytes"):
                     assert o is not None
                     print(f"  {attr}: {o.nbytes/1e6:.1f} MB")
@@ -168,7 +131,7 @@ def load_mesh(file_path = None):
                     print(f"  {attr}: {o.data.nbytes/1e6:.1f} MB (sparse nnz)")
                 else:
                     print(f"  {attr}: {type(o).__name__}")
-            print(f"  trimesh vertices: {m.Geometry.vertices.nbytes/1e6:.1f} MB, faces: {m.Geometry.faces.nbytes/1e6:.1f} MB")
+            print(f"  trimesh vertices: {mesh_object.Geometry.vertices.nbytes/1e6:.1f} MB, faces: {mesh_object.Geometry.faces.nbytes/1e6:.1f} MB")
     else:
         print("No mesh selected")
 
@@ -178,8 +141,8 @@ def retrieve_mesh():
     """
     Fucntion to speed up the operations to retrieve a mesh from the appstate
     """
-    name = app_state["UI State"]["Selected Name"]
-    mesh = app_state["Meshes"].get(name)
+    name = default_app.ui_state["Selected Name"] # app_state["UI State"]["Selected Name"]
+    mesh = default_app.meshes.get(name) # app_state["Meshes"].get(name)
     if mesh is None:
         return None, None, None
     return name, mesh, ps.get_surface_mesh(name)
@@ -196,14 +159,14 @@ def unload_mesh(name, mesh):
     if ps.has_surface_mesh(name):
         ps.remove_surface_mesh(name)
 
-    index = list(app_state["Meshes"]).index(name)
-    app_state["Meshes"].pop(name, None)
+    index = list(default_app.meshes).index(name)
+    default_app.meshes.pop(name, None)
 
-    remaining = list(app_state["Meshes"])
+    remaining = list(default_app.meshes)
     if remaining:
-        app_state["UI State"]["Selected Name"] = remaining[min(index, len(remaining) - 1)]
+        default_app.ui_state["Selected Name"] = remaining[min(index, len(remaining) - 1)]
     else:
-        app_state["UI State"]["Selected Name"] = "<none>"
+        default_app.ui_state["Selected Name"] = "<none>"
 
 @aux.timed(True)
 @aux.memory(True)
@@ -211,15 +174,15 @@ def save_mesh(new_name: str):
     """
     Function to save a mesh to stl
     """
-    name = app_state["UI State"]["Selected Name"]
-    mesh = app_state["Meshes"].get(name)
+    name = default_app.ui_state["Selected Name"]
+    mesh = default_app.meshes.get(name)
     assert isinstance(mesh,MeshObject)
     mesh.Geometry.export(new_name + ".stl")
 
 @operation("Compute Mesh Triangle Data")
 def _op_compute_triangle_data(mesh, ps_mesh):
-    if app_state["App Settings"]["APP_DEBUG"]:
-        print(f"Computing Mesh Triangle Data on {app_state['UI State']['Selected Name']}")
+    if default_app.app_settings["APP_DEBUG"]:
+        print(f"Computing Mesh Triangle Data on {default_app.ui_state['Selected Name']}")
     assert isinstance(mesh, MeshObject)
     assert isinstance(ps_mesh, ps.SurfaceMesh)
     mesh.compute_mesh_facet_values()
@@ -236,11 +199,11 @@ def _op_compute_triangle_data(mesh, ps_mesh):
 
 @operation("Compute Mesh Dots vs FLOOR")
 def _op_compute_dots(mesh, ps_mesh):
-    if app_state["App Settings"]["APP_DEBUG"]:
-        print(f"Computing Facet Dot Data on {app_state['UI State']['Selected Name']}")
+    if default_app.app_settings["APP_DEBUG"]:
+        print(f"Computing Facet Dot Data on {default_app.ui_state['Selected Name']}")
     assert isinstance(mesh, MeshObject)
     assert isinstance(ps_mesh, ps.SurfaceMesh)
-    mesh.compute_mesh_facet_direction(reference=app_state["Reference Vectors"]["FLOOR"])
+    mesh.compute_mesh_facet_direction(reference = default_app.reference_vectors["FLOOR"])
     assert mesh.FacetDots is not None
     ps_mesh.add_scalar_quantity("DOT",
                                 defined_on='faces',
@@ -255,8 +218,8 @@ def _op_compute_dots(mesh, ps_mesh):
 
 @operation("Compute normal directions")
 def _op_show_normals(mesh, ps_mesh):
-    if app_state["App Settings"]["APP_DEBUG"]:
-        print(f"Showing normal directions on {app_state['UI State']['Selected Name']}")
+    if default_app.app_settings["APP_DEBUG"]:
+        print(f"Showing normal directions on {default_app.ui_state['Selected Name']}")
     assert isinstance(mesh, MeshObject)
     assert isinstance(ps_mesh, ps.SurfaceMesh)
 
@@ -274,8 +237,8 @@ def _op_show_normals(mesh, ps_mesh):
 
 @operation("Compute Vertex Error")
 def _op_compute_curvature(mesh,ps_mesh):
-    if app_state["App Settings"]["APP_DEBUG"]:
-        print(f"Computing vertex error on {app_state['UI State']['Selected Name']} mesh")
+    if default_app.app_settings["APP_DEBUG"]:
+        print(f"Computing vertex error on {default_app.ui_state["Selected Name"]} mesh")
     assert isinstance(mesh, MeshObject)
     assert isinstance(ps_mesh, ps.SurfaceMesh)
     mesh.compute_mesh_vertex_defect()
@@ -294,14 +257,14 @@ def callback():
     Constructs all the polyscope buttons
     """
     # Debug mode On/Off
-    changed, app_state["App Settings"]["APP_DEBUG"] = imgui.checkbox(app_state["App Settings"]["APP_DEBUG"],
-                                                               "Debug Mode")
+    changed, default_app.app_settings["APP_DEBUG"] = imgui.checkbox(default_app.app_settings["APP_DEBUG"],
+                                                                    "Debug Mode")
     if changed:
-        print(f"App changed to {app_state["App Settings"]["APP_DEBUG"]}")
-        if not app_state["App Settings"]["APP_DEBUG"]:
+        print(f"App changed to {default_app.app_settings["APP_DEBUG"]}")
+        if not default_app.app_settings["APP_DEBUG"]:
             ps.set_verbosity(0)
         else:
-            ps.set_verbosity(app_state["App Settings"]["PS_VERBOSITY"])
+            ps.set_verbosity(default_app.ps_settings["PS_VERBOSITY"])
 
     imgui.separator()
 
@@ -313,23 +276,23 @@ def callback():
             print("failed to load mesh as:")
             print(e)
     imgui.same_line()
-    if imgui.button(f"Unload {app_state['UI State']['Selected Name']} mesh"):
+    if imgui.button(f"Unload {default_app.ui_state['Selected Name']} mesh"):
         name, mesh, ps_mesh = retrieve_mesh()
         unload_mesh(name, mesh)
         ps.reset_camera_to_home_view()
 
     # Controls selected mesh # TODO: Evaluate if this is the most effective way to operate this step
-    mesh_names = list(app_state["Meshes"].keys())
+    mesh_names = list(default_app.meshes.keys())
     if mesh_names:
-        selected = app_state["UI State"]["Selected Name"]
+        selected = default_app.ui_state["Selected Name"]
         index = mesh_names.index(selected) if selected in mesh_names else 0
         changed, index = imgui.combo("Working Mesh", index, mesh_names)
         if changed:
-            app_state["UI State"]["Selected Name"] = mesh_names[index]
+            default_app.ui_state["Selected Name"] = mesh_names[index]
         ## Save a mesh
-        _, app_state["UI State"]["Save Mesh Name"] = imgui.input_text(app_state["UI State"]["Save Mesh Name"], label = "New Mesh Name")
+        _, default_app.ui_state["Save Mesh Name"] = imgui.input_text(default_app.ui_state["Save Mesh Name"], label = "New Mesh Name")
         if imgui.button("Save Mesh"):
-            save_mesh(app_state["UI State"]["Save Mesh Name"])
+            save_mesh(default_app.ui_state["Save Mesh Name"])
             print("save mesh")
 
     imgui.separator()
@@ -348,19 +311,18 @@ def polyscope_app_init(pre_load = None):
     """
     controls the initialization of polyscope for ddg main
     """
-    app_settings = default_app.ps_settings
     try:
-        ps.init(backend = app_settings["PS_BACKEND"])
-        ps.set_program_name(f"{app_settings["APP_NAME"]}. Version: {app_settings["APP_VERSION"]}")
-        ps.set_verbosity(app_settings["PS_VERBOSITY"])
-        ps.set_max_fps(app_settings["PS_MAX_FRAMERATE"])
-        ps.set_give_focus_on_show(app_settings["PS_GIVE_FOCUS_ON_SHOW"])
-        ps.set_up_dir(app_settings["PS_UP_DIR"])
-        ps.set_always_redraw(app_settings["PS_SET_ALWAYS_REDRAW"])
-        ps.set_open_imgui_window_for_user_callback(app_settings["PS_SET_OPEN_IMGUI_WINDOW_FOR_USER_CALLBACK"])
+        ps.init(backend = default_app.ps_settings["PS_BACKEND"])
+        ps.set_program_name(f"{default_app.app_settings["APP_NAME"]}. Version: {default_app.app_settings["APP_VERSION"]}")
+        ps.set_verbosity(default_app.ps_settings["PS_VERBOSITY"])
+        ps.set_max_fps(default_app.ps_settings["PS_MAX_FRAMERATE"])
+        ps.set_give_focus_on_show(default_app.ps_settings["PS_GIVE_FOCUS_ON_SHOW"])
+        ps.set_up_dir(default_app.ps_settings["PS_UP_DIR"])
+        ps.set_always_redraw(default_app.ps_settings["PS_SET_ALWAYS_REDRAW"])
+        ps.set_open_imgui_window_for_user_callback(default_app.ps_settings["PS_SET_OPEN_IMGUI_WINDOW_FOR_USER_CALLBACK"])
 
-        if app_state["App Settings"]["APP_DEBUG"]:
-            print(f"Polyscope Initialized Correctly with settings: \n {app_settings}")
+        if default_app.app_settings["APP_DEBUG"]:
+            print(f"Polyscope Initialized Correctly with settings: \n {default_app.app_settings}")
 
     except Exception as e:
         print(f"Polyscope Could Not Initialized Correctly:\n {e}")
@@ -373,4 +335,4 @@ def polyscope_app_init(pre_load = None):
 
     ps.show()
 
-    return app_state
+    return default_app

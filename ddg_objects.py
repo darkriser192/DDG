@@ -389,3 +389,36 @@ def sdf_from_mesh(mesh_object: MeshObject) -> SDFObject:
     """
 
     return SDFObject(Name="A", Source=mesh_object.Name)
+
+### Geometric Functions
+def normalize(minmax,value):
+    """Map a value onto the [0, 1] span defined by a (min, max) pair.
+
+    Linear rescale reporting where ``value`` falls between ``minmax[0]`` and
+    ``minmax[1]``. The result is intentionally *not* clamped, so values outside
+    the range map below 0 or above 1 — which lets it act as a cross-item scale
+    comparator.
+
+    Parameters
+    ----------
+    minmax : sequence of float, length 2
+        The ``(min, max)`` endpoints defining the span. ``minmax[1] ==
+        minmax[0]`` yields a division by zero.
+    value : float or numpy.ndarray
+        Value(s) to normalize; broadcasts if an array is passed.
+
+    Returns
+    -------
+    float or numpy.ndarray
+        ``(value - minmax[0]) / (minmax[1] - minmax[0])``, unclamped.
+
+    Notes
+    -----
+    Useful for comparing a value against a range taken from a *different* item,
+    where out-of-[0, 1] results carry meaning.
+    """
+    
+    span = minmax[1] - minmax[0]
+    progress = value - minmax[0]
+    normalized = progress/span
+    return normalized
