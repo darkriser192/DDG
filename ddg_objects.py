@@ -2,6 +2,9 @@
 ddg_objects is the meant and potatoes of my ddg app containing objects
 for enforcing data flow and structure, and the matematical operations as functions
 """
+import sys
+import pathlib as path
+
 import numpy as np
 import scipy as sp
 import trimesh
@@ -172,12 +175,156 @@ class MeshObject():
                                                                            self.NumVerts)
         assert np.allclose(self.vertex_defect, self.TrimeshVertexDefect, atol=1e-6)
 
+class Geometry():
+    """
+    > Refactor of MeshObject:
+
+    Container for Discrete Differential Geometry
+    """
+    def __init__(self, file_path: str, ) -> None:
+        # Extract the name of the object
+        self.name = path.Path(file_path).stem
+        self.path = file_path
+        print(self.name)
+        # Try to load the schene into the object
+        try:
+            trimesh_object = trimesh.load_mesh(file_path, force='mesh')
+            self.trimesh_object = trimesh_object
+        except Exception as e:
+            print(f"Trimesh failed to load {self.name}: \n {e}")
+            sys.exit()
+
+        self.number_vertices = len(trimesh_object.vertices)
+        self.number_faces = len(trimesh_object.faces)
+
+        # Property pre-allocation/creation for reference later
+        self.facet_normals = None
+        self.normal_magnitude = None
+        self.facet_areas = None
+        self.face_centers = None
+        self.edges = None
+        self.facet_dots = {}
+        self.vertex_defects = None
+        self.vertex_angles = None
+        self.face_face_adjacency = None
+        self.vertex_vertex_adjacency = None
+        self.vertex_face_adjacency = None
+
+    @aux.timed(TIMED)
+    @aux.memory(MEMORY)
+    def compute_adjacency(self) -> None:
+        """
+        Compute relevant adjacency objects
+        """
+        rows, cols = self.trimesh_object.face_adjacency.T
+        data = np.ones(2 * len(rows))
+        # One statement: the right side is fully evaluated before either name rebinds,
+        # so both concatenates see the original arrays.
+        rows, cols = np.concatenate([rows, cols]), np.concatenate([cols, rows])
+        self.face_face_adjacency = sp.sparse.csr_matrix((data, (rows, cols)),
+                                                        shape=(self.number_faces,
+                                                               self.number_faces))
+        edges_u = self.trimesh_object.edges_unique
+        # One statement: the right side is fully evaluated before either name rebinds,
+        # so both concatenates see the original arrays.
+        vr, vc = np.concatenate([edges_u[:, 0], edges_u[:, 1]]), np.concatenate([edges_u[:, 1], edges_u[:, 0]])
+        vdata = np.ones(len(vr))
+        self.vertex_vertex_adjacency = sp.sparse.csr_matrix((vdata, (vr, vc)),
+                                                            shape = (self.number_vertices,
+                                                            self.number_vertices))
+        self.vertex_face_adjacency = self.trimesh_object.vertex_faces
+
+    # To be used by a callback or other call operation instead of doing at __init__
+    @aux.timed(TIMED)
+    @aux.memory(MEMORY)
+    def compute_mesh_facet_values(self):
+        """Populate the per-face geometric attributes on this mesh.
+
+        Thin wrapper over :func:`compute_triangle_data`; computes and stores
+        the face normals, normal magnitudes, areas, and edge vectors.
+
+        Side Effects
+        ------------
+        Sets ``self.FacetNormals``, ``self.NormalMagnitude``,
+        ``self.FacetAreas``, and ``self.Edges``.
+        """
+        self.facet_normals, self.normal_magnitude, self.facet_areas, self.edges = compute_triangle_data(self.trimesh_object.vertices[self.trimesh_object.faces])
+
+    @aux.timed(TIMED)
+    @aux.memory(MEMORY)
+    def compute_mesh_facet_direction(self, name:str, reference = np.array([0.0,0.0,1.0]), Angle = True):
+        """
+        Populate the normal-vs-reference attributes on this mesh.
+
+        Thin wrapper over :func:`check_normal_direction`; requires
+        ``self.FacetNormals`` to already be set (see
+        :meth:`_compute_mesh_facet_values`).
+
+        Parameters
+        ----------
+        reference : numpy.ndarray, shape (3,), optional
+            Direction to compare face normals against. Defaults to ``FLOOR``.
+
+        Side Effects
+        ------------
+        Sets ``self.FacetDots`` and ``self.Angles``.
+        """
+        if self.facet_normals is None:
+            self.compute_mesh_facet_values()
+
+        dots, angles = check_normal_direction(self.facet_normals , reference, angle = Angle)
+
+        values = {"dots":dots, "angles":angles}
+        self.facet_dots[name] = values
+
+    @aux.timed(TIMED)
+    @aux.memory(MEMORY)  
+    def compute_mesh_vertex_defect(self):
+        """
+        Self compute of vertex defect quantity
+        """
+        self.vertex_defects, self.vertex_angles = compute_gausian_curvature(self.edges,
+                                                                            self.trimesh_object.faces,
+                                                                            self.number_vertices)
+
+        assert np.allclose(self.vertex_defects, self.trimesh_object.vertex_defects, atol=ERR)
+
+    @aux.timed(TIMED)
+    @aux.memory(MEMORY)
+    def mem_report(self) -> dict:
+        """
+        Return the memory use of each stored attribute, in MB.
+
+        Returns
+        -------
+        report : dict
+            Attribute name -> size in MB, or None when the attribute holds no
+            measurable buffer (strings, scalars, unset fields).
+        """
+        report = {}
+        for name, value in vars(self).items():
+            if isinstance(value, np.ndarray):
+                report[name] = value.nbytes / 1e6
+            elif sp.sparse.issparse(value):
+                report[name] = value.data.nbytes / 1e6
+            else:
+                report[name] = None
+            report["trimesh.vertices"] = self.trimesh_object.vertices.nbytes / 1e6
+            report["trimesh.faces"] = self.trimesh_object.faces.nbytes / 1e6
+
+        return report
+
+    @aux.timed(TIMED)
+    @aux.memory(MEMORY)    
+    def __repr__(self):
+        return (f"Geometry({self.name!r}\n - V = {self.number_vertices}\n - F = {self.number_faces})")
+
 class SDFObject():
     """
     Data structure representing a functional Signed Distance Field, or 
     more generally a [signed] metric field
     """
-    def __init__(self, Name, Source) -> None:
+    def __init__(self, name, source) -> None:
         """
         Initialization values of the SDF, meant to "prepare" an SDF object prior to 
         actualy generating. Where a mesh comes from a file, an SDF is constructed in code
@@ -186,10 +333,8 @@ class SDFObject():
         I will probably want to bring Mesh to parity behaviour here to just initialize 
         an object then throw data to it
         """
-        self.Name = Name
-        self.Source = Source # MeshObject 'pointer' or "Kernel"
-
-        pass
+        self.name = name
+        self.source = source # MeshObject 'pointer' or "Kernel"
 
 ### Support Functions
 @aux.timed(TIMED)
@@ -388,9 +533,11 @@ def sdf_from_mesh(mesh_object: MeshObject) -> SDFObject:
     # Not married to the idea
     """
 
-    return SDFObject(Name="A", Source=mesh_object.Name)
+    return SDFObject(name="Default Name", source=mesh_object.Name)
 
 ### Geometric Functions
+@aux.timed(TIMED)
+@aux.memory(MEMORY)
 def normalize(minmax,value):
     """Map a value onto the [0, 1] span defined by a (min, max) pair.
 
@@ -422,3 +569,6 @@ def normalize(minmax,value):
     progress = value - minmax[0]
     normalized = progress/span
     return normalized
+
+if __name__ == "__main__":
+    Geometry(file_path="D:\\DDG\\rabbit-low-poly.stl")
