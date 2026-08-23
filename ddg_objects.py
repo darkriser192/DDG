@@ -177,9 +177,63 @@ class MeshObject():
 
 class Geometry():
     """
-    > Refactor of MeshObject:
+    Container for a triangle mesh and its discrete-geometry quantities.
 
-    Container for Discrete Differential Geometry
+    Wraps a ``trimesh`` mesh and exposes the quantities used across the
+    project. Construction is cheap: only the name, path, and element counts
+    are set. Every geometric quantity is computed on request by a
+    ``compute_*`` method. Replaces :class:`MeshObject`.
+
+    Parameters
+    ----------
+    file_path : str
+        Path to a mesh file loadable by ``trimesh.load_mesh`` (e.g. an STL).
+        Loaded with ``force='mesh'`` so multi-body files collapse to a single
+        mesh rather than a ``Scene``.
+
+    Attributes
+    ----------
+    name : str
+        File stem (no extension), reused as the Polyscope structure name.
+    path : str
+        The file path passed at construction.
+    trimesh_object : trimesh.Trimesh
+        The underlying loaded mesh.
+    number_vertices : int
+        Vertex count (V).
+    number_faces : int
+        Face count (F).
+    facet_normals : numpy.ndarray or None, shape (F, 3)
+        Unit normal per face.
+    normal_magnitude : numpy.ndarray or None, shape (F,)
+        Magnitude of each raw face cross product, i.e. twice the face area.
+    facet_areas : numpy.ndarray or None, shape (F,)
+        Area per face.
+    face_centers : numpy.ndarray or None, shape (F, 3)
+        Centroid per face. No method currently sets this.
+    edges : numpy.ndarray or None, shape (F, 3, 3)
+        The three edge vectors per face, stacked edge-index first.
+    facet_dots : dict
+        Reference name -> ``{"dots": (F,), "angles": (F,) or None}``. Holds one
+        entry per reference direction compared against.
+    vertex_defects : numpy.ndarray or None, shape (V,)
+        Angle defect per vertex: ``2*pi`` minus the incident corner angles.
+    vertex_angles : numpy.ndarray or None, shape (F, 3)
+        Corner angle at each face corner, in radians.
+    face_face_adjacency : scipy.sparse.csr_matrix or None, shape (F, F)
+        Symmetric; 1 where two faces share an edge.
+    vertex_vertex_adjacency : scipy.sparse.csr_matrix or None, shape (V, V)
+        Symmetric; 1 where two vertices share an edge.
+    vertex_face_adjacency : numpy.ndarray or None
+        Per-vertex incident face indices, from ``trimesh.vertex_faces``.
+
+    Notes
+    -----
+    Attributes documented ``or None`` stay unset until their ``compute_*``
+    method runs. Methods self-heal their own dependencies where they have any,
+    so the ``compute_*`` calls are order-independent. :meth:`compute_adjacency`
+    is the exception: nothing calls it automatically, because nothing consumes
+    the adjacency structures yet.
     """
     def __init__(self, file_path: str, ) -> None:
         # Extract the name of the object
@@ -192,7 +246,6 @@ class Geometry():
             self.trimesh_object = trimesh_object
         except Exception as e:
             print(f"Trimesh failed to load {self.name}: \n {e}")
-            sys.exit()
 
         self.number_vertices = len(trimesh_object.vertices)
         self.number_faces = len(trimesh_object.faces)
@@ -213,8 +266,24 @@ class Geometry():
     @aux.timed(TIMED)
     @aux.memory(MEMORY)
     def compute_adjacency(self) -> None:
-        """
-        Compute relevant adjacency objects
+        """Compute and store the three adjacency structures.
+
+        Builds symmetric sparse connectivity matrices from the ``trimesh``
+        topology. Nothing calls this automatically -- call it before any
+        operation that needs adjacency.
+
+        Side Effects
+        ------------
+        Sets ``self.face_face_adjacency``, ``self.vertex_vertex_adjacency``,
+        and ``self.vertex_face_adjacency``.
+
+        Notes
+        -----
+        Every stored entry is 1.0: these encode connectivity, not weights.
+        Each index pair is stacked in both orders inside a single assignment
+        statement, so both concatenations see the pre-swap arrays.
+        ``vertex_vertex_adjacency`` is built from ``edges_unique``, which is
+        also the index set the boundary operators will need.
         """
         rows, cols = self.trimesh_object.face_adjacency.T
         data = np.ones(2 * len(rows))
@@ -238,36 +307,42 @@ class Geometry():
     @aux.timed(TIMED)
     @aux.memory(MEMORY)
     def compute_mesh_facet_values(self):
-        """Populate the per-face geometric attributes on this mesh.
+        """Compute and store the per-face geometric quantities.
 
-        Thin wrapper over :func:`compute_triangle_data`; computes and stores
-        the face normals, normal magnitudes, areas, and edge vectors.
+        Thin wrapper over :func:`compute_triangle_data`.
 
         Side Effects
         ------------
-        Sets ``self.FacetNormals``, ``self.NormalMagnitude``,
-        ``self.FacetAreas``, and ``self.Edges``.
+        Sets ``self.facet_normals``, ``self.normal_magnitude``,
+        ``self.facet_areas``, and ``self.edges``.
         """
         self.facet_normals, self.normal_magnitude, self.facet_areas, self.edges = compute_triangle_data(self.trimesh_object.vertices[self.trimesh_object.faces])
 
     @aux.timed(TIMED)
     @aux.memory(MEMORY)
     def compute_mesh_facet_direction(self, name:str, reference = np.array([0.0,0.0,1.0]), Angle = True):
-        """
-        Populate the normal-vs-reference attributes on this mesh.
+        """Compare face normals against one named reference direction.
 
-        Thin wrapper over :func:`check_normal_direction`; requires
-        ``self.FacetNormals`` to already be set (see
-        :meth:`_compute_mesh_facet_values`).
+        Thin wrapper over :func:`check_normal_direction`. Computes
+        ``self.facet_normals`` first if it is unset, so call order does not
+        matter for this method.
 
         Parameters
         ----------
+        name : str
+            Key to store the result under, e.g. ``"FLOOR"``. Results for
+            several reference directions coexist; reusing a key overwrites it.
         reference : numpy.ndarray, shape (3,), optional
-            Direction to compare face normals against. Defaults to ``FLOOR``.
+            Direction to compare face normals against. Assumed unit length, so
+            the dot product reads as ``cos(theta)``. Defaults to +Z.
+        Angle : bool, optional
+            If True (default), also compute the angle in radians.
 
         Side Effects
         ------------
-        Sets ``self.FacetDots`` and ``self.Angles``.
+        Sets ``self.facet_dots[name]`` to a dict with keys ``"dots"``
+        (shape (F,)) and ``"angles"`` (shape (F,), or None when ``Angle`` is
+        False).
         """
         if self.facet_normals is None:
             self.compute_mesh_facet_values()
@@ -280,9 +355,34 @@ class Geometry():
     @aux.timed(TIMED)
     @aux.memory(MEMORY)  
     def compute_mesh_vertex_defect(self):
+        """Compute and store the per-vertex angle defect.
+
+        The discrete Gaussian curvature at a vertex: ``2*pi`` minus the sum of
+        the corner angles meeting there.
+
+        Side Effects
+        ------------
+        Sets ``self.vertex_defects`` and ``self.vertex_angles``.
+
+        Computes ``self.edges`` first if it is unset, so call order does not
+        matter.
+
+        Raises
+        ------
+        AssertionError
+            If the result disagrees with the ``trimesh`` value by more
+            than ``ERR``.
+
+        Notes
+        -----
+        The trimesh comparison is a deliberate, permanent oracle: it is what
+        makes this hand-written curvature safe to refactor. Measured agreement
+        on ``rabbit-low-poly.stl`` is about 5e-14, so the tolerance has ample
+        margin.
         """
-        Self compute of vertex defect quantity
-        """
+        if self.edges is None:
+            self.compute_mesh_facet_values()
+
         self.vertex_defects, self.vertex_angles = compute_gausian_curvature(self.edges,
                                                                             self.trimesh_object.faces,
                                                                             self.number_vertices)
@@ -309,13 +409,13 @@ class Geometry():
                 report[name] = value.data.nbytes / 1e6
             else:
                 report[name] = None
-            report["trimesh.vertices"] = self.trimesh_object.vertices.nbytes / 1e6
-            report["trimesh.faces"] = self.trimesh_object.faces.nbytes / 1e6
+        report["trimesh.vertices"] = self.trimesh_object.vertices.nbytes / 1e6
+        report["trimesh.faces"] = self.trimesh_object.faces.nbytes / 1e6
 
         return report
 
-    @aux.timed(TIMED)
-    @aux.memory(MEMORY)    
+    @aux.timed(False)
+    @aux.memory(False)    
     def __repr__(self):
         return (f"Geometry({self.name!r}\n - V = {self.number_vertices}\n - F = {self.number_faces})")
 

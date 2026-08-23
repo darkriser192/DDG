@@ -133,3 +133,84 @@ buying until you do.** Breadth is already covered; the shelf proves it.
 
 Everything else is just-in-time. The failure mode to avoid is acquiring more
 than you finish.
+
+---
+
+## Software concepts — vocabulary to search (added 2026-08-18)
+
+Not books. Search terms, essays, and talks, for the question *"the math layer
+and the app layer cannot follow the same best practices — what are the two sets?"*
+
+**The premise:** the two layers have opposite success criteria. The math layer
+computes a function (same inputs, same outputs, no history), so state is pure
+liability and success means **eliminating** it. The app layer manages state over
+time and talks to the world, so state is not a defect — it *is* the product, and
+success means making it **legible and single-sourced**. Most "clean code" advice
+is written for the app layer and reads wrong against numerical code. The layers
+meet at a boundary, and the boundary is where you are strictest: validate once on
+the way in, then let the core assume validity.
+
+| Concern | Math layer (`ddg_objects`) | App layer (`ddg_poly`) |
+|---|---|---|
+| State | Eliminate it | Organise it, single source of truth |
+| Functions | Pure, referentially transparent | Effectful; isolate the effects |
+| Inputs | All explicit parameters | Globals acceptable if there is one owner |
+| Correctness | Invariants, oracles, property tests | Reachable-state reasoning |
+| Failure | Total functions — defined for every input | Recover, keep the app alive |
+| Priority | Numerical stability over elegance | Predictability over cleverness |
+| Testing | Properties and oracles | Hard to unit test; keep the layer thin |
+
+### Start here — these three answer the question directly
+
+- [ ] **"Functional core, imperative shell"** — Gary Bernhardt talk, ~30 min, free.
+  Exactly the pure-math-inside / effectful-shell-outside split already built here.
+- [ ] **"Parse, don't validate"** — Alexis King essay, free. Solves `X | None`
+  structurally instead of with scattered `is None` checks.
+- [ ] **"Make illegal states unrepresentable"** — the design principle behind both.
+
+### Math-layer discipline
+
+- [ ] **Referential transparency** — the formal name for what the pure functions have.
+- [ ] **Total vs partial functions** — why `vector_values` handling zero-length
+  vectors is a design win, not a courtesy.
+- [ ] **Property-based testing** (Python library: **Hypothesis**) — assert
+  properties, not examples: "corner angles sum to π", "defect sums to 2πχ".
+  The generalisation of the trimesh oracle. Highest-value item in this section.
+- [ ] **Test oracle** / **differential testing** — the formal names for the
+  `trimesh.vertex_defects` comparison.
+- [ ] **Metamorphic testing** — how to test when no oracle exists. Needed as soon
+  as the operators go beyond what trimesh provides.
+- [ ] **Numerical stability**, **catastrophic cancellation**, **condition number**
+  — why floating-point geometry breaks.
+- [ ] **Robust geometric predicates** — Shewchuk, already listed above. The
+  rigorous answer to degenerate input.
+- [ ] **Dimensional analysis in code** / **units of measure** — addresses the
+  `ERR` scale problem (an absolute constant compared against an area).
+
+### App-layer discipline
+
+- [ ] **Single source of truth**, **unidirectional data flow** — what the `App`
+  class is reaching for.
+- [ ] **Immediate mode vs retained mode GUI** — explains the shape of the callback.
+- [ ] **Finite state machine** / **Harel statecharts** — for when the UI gains
+  genuinely distinct modes.
+- [ ] **Idempotence** — why the operation buttons are safe to mash.
+
+### Spanning both layers
+
+- [ ] **Design by contract** — Bertrand Meyer. Preconditions, postconditions,
+  class invariants. The theory the `assert` statements are an informal instance of.
+- [ ] **Command-query separation** — already followed here; worth knowing the name.
+
+### Ordering and staleness
+
+- [ ] **Lamport, "Time, Clocks, and the Ordering of Events in a Distributed
+  System"** (1978, free) — ✅ already read. Not a distributed-systems need here
+  (one process, one thread), but the *ontology* transfers: causal order is a
+  **partial** order, and any total order over it is an imposed convention.
+  Applies to the `compute_*` dependency graph and to derived-value staleness.
+- [ ] **Logical clock** / **version counter** / **generation number** /
+  **dirty flag** — the single-process form of a Lamport timestamp. The standard
+  fix for "is this cached quantity derived from the current geometry?"
+- [ ] **Cache invalidation** and **reactive dependency graphs** — the same problem
+  as solved in mesh kernels and UI frameworks.
