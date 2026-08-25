@@ -2,7 +2,7 @@
 ddg_objects is the meant and potatoes of my ddg app containing objects
 for enforcing data flow and structure, and the matematical operations as functions
 """
-import sys
+# import sys
 import pathlib as path
 
 import numpy as np
@@ -19,162 +19,6 @@ MEMORY = True # Debug flag for memory probing
 ERR = 1e-8 # Defines a global error value for some computations
 
 ### Support Classes
-class MeshObject():
-    """
-    Container that loads a mesh and precomputes connectivity and face data.
-
-    Wraps a ``trimesh`` mesh and eagerly computes the quantities used
-    throughout the project (face normals/areas, edges, and the three
-    adjacency structures), exposing them as plain attributes for easy access.
-
-    Parameters
-    ----------
-    FilePath : str
-        Path to a mesh file loadable by ``trimesh.load`` (e.g. an STL).
-        Loaded with ``force='mesh'`` so multi-body files collapse to a single
-        mesh rather than a ``Scene``.
-    Name : str
-        Human-readable label for the mesh, reused as the Polyscope name.
-
-    Attributes
-    ----------
-    Name : str
-        The label passed in at construction.
-    Geometry : trimesh.Trimesh
-        The underlying loaded mesh.
-    FacetNormals : numpy.ndarray, shape (F, 3)
-        Unit normal per face.
-    NormalMagnitude : numpy.ndarray, shape (F,)
-        Magnitude of each raw face cross product (twice the area).
-    FacetAreas : numpy.ndarray, shape (F,)
-        Area of each face.
-    edges : numpy.ndarray, shape (F, 3, 3)
-        The three edge vectors per face, stacked edge-index first.
-    NumVerts : int
-        Number of vertices (V).
-    NumFaces : int
-        Number of faces (F).
-    vertex_face_adjacency : numpy.ndarray
-        Per-vertex incident face indices (from ``trimesh.vertex_faces``).
-    vertex_vertex_adjacency : scipy.sparse.csr_matrix, shape (V, V)
-        Symmetric vertex-adjacency matrix (1 where two vertices share an edge).
-    face_face_adjacency : scipy.sparse.csr_matrix, shape (F, F)
-        Symmetric face-adjacency matrix (1 where two faces share an edge).
-
-    Notes
-    -----
-    All quantities are computed eagerly in ``__init__``. 
-    """
-
-    @aux.timed(TIMED)
-    @aux.memory(MEMORY)
-    def __init__(self,FilePath, Name) -> None:
-        # Required initiations
-        self.Name = Name
-        try:
-            self.Geometry = trimesh.load(FilePath, force='mesh')
-        except Exception as e:
-            print("failed to load trimesh mesh")
-            print(e)
-
-        assert isinstance(self.Geometry, trimesh.Trimesh)
-
-        self.NumVerts = len(self.Geometry.vertices)
-        self.NumFaces = len(self.Geometry.faces)
-        rows, cols = self.Geometry.face_adjacency.T
-        data = np.ones(2 * len(rows))
-        r = np.concatenate([rows, cols])
-        c = np.concatenate([cols, rows])
-        self.face_face_adjacency = sp.sparse.csr_matrix((data, (r, c)),
-                                                        shape=(self.NumFaces, self.NumFaces))
-        edges_u = self.Geometry.edges_unique
-        vr = np.concatenate([edges_u[:, 0], edges_u[:, 1]])
-        vc = np.concatenate([edges_u[:, 1], edges_u[:, 0]])
-        vdata = np.ones(len(vr))
-        self.vertex_vertex_adjacency = sp.sparse.csr_matrix((vdata, (vr, vc)),
-                                                            shape = (self.NumVerts,
-                                                                     self.NumVerts))
-        self.vertex_face_adjacency = self.Geometry.vertex_faces
-
-        # Memory pre-alocation (Questionable if needed)
-        self.FacetNormals = None
-        self.NormalMagnitude = None
-        self.FacetAreas = None
-        _, _, _, self.Edges = compute_triangle_data(self.Geometry.vertices[self.Geometry.faces])
-        self.FacetDots = None
-        self.Angles = None
-        # Data that will be computed upon request
-        self.Centers = compute_face_center_3d(self.Geometry.vertices[self.Geometry.faces])
-        self.TrimeshVertexDefect = trimesh.curvature.vertex_defects(self.Geometry)
-        self.vertex_defect = None
-        self.corner_angles = None
-
-        ## Prints for debugging
-        print("Loaded Correctly")
-        print(f"Name: \n {self.Name}")
-        print(f"Num Verts: \n {self.NumVerts}")
-        print(f"Num Faces: \n {self.NumFaces}")
-        if DEBUG:
-            print("Vertices: \n", self.Geometry.vertices)
-            print("Faces: \n", self.Geometry.faces)
-            print("Tri Coords: \n", self.Geometry.vertices[self.Geometry.faces])
-            print("Face Adjacency: \n", self.face_face_adjacency)
-            print("Face Centers: \n", self.Centers)
-            print("Edges: \n", self.Edges)
-
-    # To be used by a callback or other call operation instead of doing at __init__
-    @aux.timed(TIMED)
-    @aux.memory(MEMORY)
-    def compute_mesh_facet_values(self):
-        """Populate the per-face geometric attributes on this mesh.
-
-        Thin wrapper over :func:`compute_triangle_data`; computes and stores
-        the face normals, normal magnitudes, areas, and edge vectors.
-
-        Side Effects
-        ------------
-        Sets ``self.FacetNormals``, ``self.NormalMagnitude``,
-        ``self.FacetAreas``, and ``self.Edges``.
-        """
-        self.FacetNormals, self.NormalMagnitude, self.FacetAreas, self.Edges = compute_triangle_data(self.Geometry.vertices[self.Geometry.faces])
-
-    @aux.timed(TIMED)
-    @aux.memory(MEMORY)
-    def compute_mesh_facet_direction(self, reference = np.array([0.0,0.0,1.0]), Angle = True):
-        """
-        Populate the normal-vs-reference attributes on this mesh.
-
-        Thin wrapper over :func:`check_normal_direction`; requires
-        ``self.FacetNormals`` to already be set (see
-        :meth:`_compute_mesh_facet_values`).
-
-        Parameters
-        ----------
-        reference : numpy.ndarray, shape (3,), optional
-            Direction to compare face normals against. Defaults to ``FLOOR``.
-
-        Side Effects
-        ------------
-        Sets ``self.FacetDots`` and ``self.Angles``.
-        """
-        if self.FacetNormals is None:
-            self.compute_mesh_facet_values()
-
-        self.FacetDots, self.Angles = check_normal_direction(self.FacetNormals,
-                                                             reference,
-                                                             angle = Angle)
-
-    @aux.timed(TIMED)
-    @aux.memory(MEMORY)  
-    def compute_mesh_vertex_defect(self):
-        """
-        Self compute of vertex defect quantity
-        """
-        self.vertex_defect, self.corner_angles = compute_gausian_curvature(self.Edges,
-                                                                           self.Geometry.faces,
-                                                                           self.NumVerts)
-        assert np.allclose(self.vertex_defect, self.TrimeshVertexDefect, atol=1e-6)
-
 class Geometry():
     """
     Container for a triangle mesh and its discrete-geometry quantities.
@@ -320,7 +164,7 @@ class Geometry():
 
     @aux.timed(TIMED)
     @aux.memory(MEMORY)
-    def compute_mesh_facet_direction(self, name:str, reference = np.array([0.0,0.0,1.0]), Angle = True):
+    def compute_mesh_facet_direction(self, name:str, reference = np.array([0.0,0.0,1.0]), angle = True):
         """Compare face normals against one named reference direction.
 
         Thin wrapper over :func:`check_normal_direction`. Computes
@@ -347,13 +191,13 @@ class Geometry():
         if self.facet_normals is None:
             self.compute_mesh_facet_values()
 
-        dots, angles = check_normal_direction(self.facet_normals , reference, angle = Angle)
+        dots, angles = check_normal_direction(self.facet_normals , reference, angle = angle)
 
         values = {"dots":dots, "angles":angles}
         self.facet_dots[name] = values
 
     @aux.timed(TIMED)
-    @aux.memory(MEMORY)  
+    @aux.memory(MEMORY)
     def compute_mesh_vertex_defect(self):
         """Compute and store the per-vertex angle defect.
 
@@ -415,7 +259,7 @@ class Geometry():
         return report
 
     @aux.timed(False)
-    @aux.memory(False)    
+    @aux.memory(False)
     def __repr__(self):
         return (f"Geometry({self.name!r}\n - V = {self.number_vertices}\n - F = {self.number_faces})")
 
@@ -626,14 +470,14 @@ def compute_gausian_curvature(edges, faces, num_verts):
 ## Generates an SDF from a mesh
 @aux.timed(TIMED)
 @aux.memory(MEMORY)
-def sdf_from_mesh(mesh_object: MeshObject) -> SDFObject:
+def sdf_from_mesh(mesh_object: Geometry) -> SDFObject:
     """
     Backbone to generate an sdf from a mesh.
     # TODO: No idea how thils will work but it will probably exist.
     # Not married to the idea
     """
 
-    return SDFObject(name="Default Name", source=mesh_object.Name)
+    return SDFObject(name="Default Name", source=mesh_object.name)
 
 ### Geometric Functions
 @aux.timed(TIMED)
@@ -664,7 +508,7 @@ def normalize(minmax,value):
     Useful for comparing a value against a range taken from a *different* item,
     where out-of-[0, 1] results carry meaning.
     """
-    
+
     span = minmax[1] - minmax[0]
     progress = value - minmax[0]
     normalized = progress/span

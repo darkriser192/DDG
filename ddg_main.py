@@ -33,9 +33,10 @@ if __name__ == "__main__":
     pprint("File self entry point start")
     # Does this even make sense? No, but i will figure this part out later...
     try:
-        meshes = main('.\\rabbit-low-poly.stl')
+        DEFAULT_MESH = "D:\\DDG\\rabbit-low-poly.stl"
+        meshes = main(pre_load = DEFAULT_MESH)
         print(meshes)
     except Exception as e:
-        pprint(f"Main could not start correctly:\n {e}")
+        pprint(f"Main exited with unhandled exception:\n {e}")
         sys.exit()
     pprint("File self entry point end")

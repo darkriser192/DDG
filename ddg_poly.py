@@ -1,17 +1,26 @@
-"""
-ddg_poly handles the polyscope operations for the ddg app
-ref: https://polyscope.run/py/basics/interactive_UIs_and_animation/#sample-custom-ui
+"""Polyscope application layer for the DDG toolkit.
+
+Owns everything the viewer needs: the :class:`AppState` container, the
+``@operation`` button registry, mesh load/unload/save, and the per-frame
+:func:`callback`. The mathematics lives in ``ddg_objects``, which imports
+nothing from here -- the dependency runs one way only, so the math layer stays
+testable without a GUI.
+
+References
+----------
+https://polyscope.run/py/basics/interactive_UIs_and_animation/#sample-custom-ui
 """
 ## Imports
-import os
+# import os
 import sys
 from dataclasses import dataclass, field
-from pprint import pprint
+from typing import Literal
+#from pprint import pprint
 import numpy as np
 import polyscope as ps
 
 import ddg_objects as ddg_obj
-from ddg_objects import MeshObject
+from ddg_objects import Geometry
 import ps_wrappers as imgui
 import AuxFunctions as aux
 
@@ -19,69 +28,6 @@ import AuxFunctions as aux
 TIMED = ddg_obj.TIMED
 MEMORY = ddg_obj.MEMORY
 ERR = ddg_obj.ERR
-
-class App():
-    """
-    App class to generate all app settings and store memory, enforce grammart and whatever else
-
-    - app_settings: Contains configurations for app level utilization
-    - ps_settings: Contains configurations for the polyscope initialization
-    - opperations: Contains the button creation storage
-    - meshes: Memory storage for the loaded meshes
-    - transforms: Memory storage for a trasnform tree
-    - ui_state: where we save all button , fields, checkboxes for the UI
-    - reference_vectors: Convention of meaningful vectors I might want to store for use later
-    - secondaty: another thing to track locations will use to check direction from some other vector
-    """
-    def __init__(self) -> None:
-        self.app_settings = {
-            "APP_NAME": "Discreate Differential Geometry Toolkit",
-            "APP_VERSION": "0.0.1_beta",
-            "APP_DEBUG": True,
-        }
-        self.ps_settings = { # Direct control of initialization settings for polyscope
-            "PS_VERBOSITY": 5,
-            "PS_BACKEND": "auto",
-            "PS_MAX_FRAMERATE": 59,
-            "PS_GIVE_FOCUS_ON_SHOW": True,
-            "PS_UP_DIR": "z_up",
-            "PS_SET_ALWAYS_REDRAW": True,
-            "PS_SET_OPEN_IMGUI_WINDOW_FOR_USER_CALLBACK": True,
-            }
-        self.operations = {} # TODO: add subsections based on app menu
-        self.meshes = {}
-        self.transforms = {}
-        self.ui_state = {
-            "Auto Update": False,
-            "Selected Name": "<none>",
-            "Selected IDX": 0,
-            "Save Mesh Name": "Default Mesh Name"
-            }
-        self.reference_vectors = {
-            "UP": np.array([0.0,0.0,1.0]), # +Z-axis
-            "DOWN": -1 * np.array([0.0,0.0,1.0]), # -Z-axis
-            "RIGHT": np.array([1.0,0.0,0.0]), # +X-axis
-            "LEFT": -1.0 * np.array([1.0,0.0,0.0]), # -X-axis
-            "BACK": np.array([0.0,1.0,0.0]), # +Y-axis
-            "FRONT": -1.0 * np.array([0.0,1.0,0.0]), # -Y-axis
-            "FLOOR": np.array([0.0,0.0,1.0]), # Direction of the floor
-            }
-        self.secondary = { # Things that might be incidentally usefull but I have no better place to put
-            "Source": np.array([4500.0,4500.0,4500.0]), # another thing to track locations will use to check direction from some other vector
-            }
-
-    def __repr__(self) -> str:
-        return (f"App(meshes={len(self.meshes)}, "
-                f"selected={self.ui_state['Selected Name']!r}, "
-                f"operations={len(self.operations)}, "
-                f"debug={self.app_settings['APP_DEBUG']})")
-
-
-
-
-
-
-
 
 @dataclass(frozen = True)
 class AppSettings():
@@ -104,13 +50,13 @@ class AppSettings():
         If ``version`` is empty.
     """
     name: str = "Discrete Differential Geometry Toolkit"
-    version: str = "0.0.1_gamma"
+    version: str = "0.0.2"
 
     def __post_init__(self):
         if not self.version:
             raise ValueError("Version Must Be Set")
 
-@dataclass(frozen = False)
+@dataclass(frozen = True)
 class PolyscopeSettings():
     """Polyscope initialization settings.
 
@@ -148,7 +94,7 @@ class PolyscopeSettings():
     directly, leaving this recipe untouched.
     """
     verbosity: int = 5
-    backend: str = "auto"
+    backend: Literal["auto", "openGL3_glfw", "openGL3_egl", "openGL_mock"] = "auto"
     max_framerate: int = 59
     give_focus_on_show: bool = True
     up_dir: str = "z_up"
@@ -219,9 +165,8 @@ class UserInterfaceState():
 class AppState():
     """Single container for all state owned by the Polyscope app layer.
 
-    The replacement for :class:`App`. One instance, ``default_app``, is the
-    single source of truth for the GUI layer; the math layer in
-    ``ddg_objects`` knows nothing about it.
+    One module-level instance, ``app``, is the single source of truth for the
+    GUI layer; the math layer in ``ddg_objects`` knows nothing about it.
 
     Grouping rule: a **dataclass** when the field names are written as literals
     in source, so Pylance can check them; a **dict** when the keys arrive as
@@ -261,7 +206,7 @@ class AppState():
     by every instance; Python rejects it outright for anything unhashable,
     which includes any non-frozen dataclass.
     """
-    app_settings: AppSettings = field(default=AppSettings())
+    app_settings: AppSettings = field(default_factory=AppSettings)
     polyscope_settings: PolyscopeSettings = field(default_factory=PolyscopeSettings)
     user_interface_state: UserInterfaceState = field(default_factory=UserInterfaceState)
 
@@ -278,24 +223,74 @@ class AppState():
         )
         return string
 
-default_app = App()
+app = AppState()
 
 def operation(label):
-    """
-    Button generation automation function, decorator / wrapper
+    """Register a function as a button in the operations panel.
+
+    Decorator factory. The decorated function is stored in ``app.operations``
+    under ``label`` and returned unchanged, so it stays directly callable.
+    :func:`callback` walks the registry each frame and draws one button per
+    entry, which means adding a button is one decorated function and no edit
+    to the callback.
+
+    Parameters
+    ----------
+    label : str
+        Button text, and the registry key. Reusing a label replaces the
+        earlier entry.
+
+    Returns
+    -------
+    deco : callable
+        Decorator taking ``fn(mesh, ps_mesh)`` and returning it unchanged.
+
+    Side Effects
+    ------------
+    Writes into the module-level ``app.operations`` at import time, so every
+    operation is registered before ``main`` runs.
+
+    Examples
+    --------
+    >>> @operation("Compute Areas")
+    ... def _op_areas(mesh, ps_mesh):
+    ...     mesh.compute_mesh_facet_values()
     """
     def deco(fn):
-        default_app.operations[label] = fn
+        app.operations[label] = fn
         return fn
     return deco
 
 @aux.timed(TIMED)
 @aux.memory(MEMORY)
 def load_mesh(file_path = None):
+    """Load a mesh from disk and register it with Polyscope.
+
+    Builds a :class:`Geometry`, stores it in ``app.meshes`` keyed by the file
+    stem, makes it the working mesh, and registers a Polyscope surface mesh
+    under the same name -- the shared key is what lets :func:`retrieve_mesh`
+    pair the two later.
+
+    Parameters
+    ----------
+    file_path : str, optional
+        Path to any mesh file ``trimesh`` can read. When None, opens a file
+        dialog via :func:`AuxFunctions.read_file`; a cancelled dialog returns
+        None and the function reports "No mesh selected" without loading.
+
+    Side Effects
+    ------------
+    Writes ``app.meshes`` and ``app.user_interface_state``, registers a
+    Polyscope structure with back-face culling, and resets the camera. Prints
+    a per-attribute memory breakdown when debug is on.
+
+    Notes
+    -----
+    Loading a file whose stem is already present overwrites both the entry in
+    ``app.meshes`` and the Polyscope structure, discarding any scalar
+    quantities previously attached to it.
     """
-    Takes a filepath and loads it to memory
-    """
-    if default_app.app_settings["APP_DEBUG"]:
+    if app.user_interface_state.debug:
         print("Loading a mesh")
 
     ## Open a window and retrieve a file path, use it to load into a mesh object
@@ -303,26 +298,30 @@ def load_mesh(file_path = None):
         file_path = aux.read_file()
 
     if file_path is not None:
-        name = os.path.basename(file_path)
-        mesh_object = MeshObject(FilePath = file_path,
-                                 Name = name)
-        default_app.meshes[name] = mesh_object
-        default_app.ui_state["Selected Name"] = name
-        default_app.ui_state["Selected IDX"] = len(default_app.meshes) - 1
+        mesh_object = Geometry(
+            file_path = file_path,
+            )
+        name = mesh_object.name
+        app.meshes[name] = mesh_object
+        app.user_interface_state.selected_mesh = name
+        app.user_interface_state.selected_idx = len(app.meshes) - 1
 
-        ps_mesh = ps.register_surface_mesh(mesh_object.Name,
-                                           mesh_object.Geometry.vertices,
-                                           mesh_object.Geometry.faces)
+        ps_mesh = ps.register_surface_mesh(mesh_object.name,
+                                           mesh_object.trimesh_object.vertices,
+                                           mesh_object.trimesh_object.faces)
 
-        ps_mesh.set_back_face_policy('cull')
+        ps_mesh.set_back_face_policy('cull') # TODO: Default all to "cull" might change later
 
         ps.reset_camera_to_home_view()
 
-        if default_app.app_settings["APP_DEBUG"]:
+        if app.user_interface_state.debug:
             print(f"Loaded a mesh: {name}")
             g = mesh_object.vertex_vertex_adjacency
-            print(f"verts={mesh_object.NumVerts}  faces={mesh_object.NumFaces}")
-            print(f"vertex adjacency (sparse): shape {g.shape}, nnz {g.nnz}, {g.data.nbytes/1e6:.1f} MB")
+            print(f"verts={mesh_object.number_vertices}  faces={mesh_object.number_faces}")
+            if g is not None:
+                print(f"vertex adjacency (sparse): shape {g.shape}, nnz {g.nnz}, {g.data.nbytes/1e6:.1f} MB")
+            else:
+                print("No Adjacency computed")
             attributes = vars(mesh_object) # TODO : Change to a  method call later
             print("These are the attributes ", attributes)
             for attr in attributes:
@@ -335,18 +334,33 @@ def load_mesh(file_path = None):
                     print(f"  {attr}: {o.data.nbytes/1e6:.1f} MB (sparse nnz)")
                 else:
                     print(f"  {attr}: {type(o).__name__}")
-            print(f"  trimesh vertices: {mesh_object.Geometry.vertices.nbytes/1e6:.1f} MB, faces: {mesh_object.Geometry.faces.nbytes/1e6:.1f} MB")
+            print(f"- Vertices: {mesh_object.trimesh_object.vertices.nbytes/1e6:.1f} MB,"
+                  f"- Faces: {mesh_object.trimesh_object.faces.nbytes/1e6:.1f} MB")
     else:
         print("No mesh selected")
 
 @aux.timed(True)
 @aux.memory(True)
 def retrieve_mesh():
+    """Fetch the working mesh together with its Polyscope counterpart.
+
+    Returns
+    -------
+    name : str or None
+        Name of the working mesh, or None when nothing is selected.
+    mesh : Geometry or None
+        The stored geometry, or None.
+    ps_mesh : polyscope.SurfaceMesh or None
+        The registered Polyscope structure, or None.
+
+    Notes
+    -----
+    The three values are None together, so a caller may test any one of them.
+    Returning the name alongside saves callers a second lookup when they need
+    it for a label or a message.
     """
-    Fucntion to speed up the operations to retrieve a mesh from the appstate
-    """
-    name = default_app.ui_state["Selected Name"] # app_state["UI State"]["Selected Name"]
-    mesh = default_app.meshes.get(name) # app_state["Meshes"].get(name)
+    name = app.user_interface_state.selected_mesh
+    mesh = app.meshes.get(name)
     if mesh is None:
         return None, None, None
     return name, mesh, ps.get_surface_mesh(name)
@@ -354,121 +368,237 @@ def retrieve_mesh():
 @aux.timed(True)
 @aux.memory(True)
 def unload_mesh(name, mesh):
-    """
-    Unload the selected mesh from Polyscope and from app_state.
+    """Remove a mesh from Polyscope and from the app state.
+
+    Picks a replacement afterwards so the working mesh stays valid: the entry
+    that inherits the removed one's position, or the last remaining entry when
+    the removed one was at the end.
+
+    Parameters
+    ----------
+    name : str
+        Mesh name. Serves as both the Polyscope structure name and the key
+        into ``app.meshes``.
+    mesh : Geometry or None
+        The mesh itself. Only tested against None; the removal works entirely
+        from ``name``.
+
+    Side Effects
+    ------------
+    Removes the Polyscope structure, pops the entry from ``app.meshes``, and
+    rewrites ``selected_mesh`` -- to ``"<none>"`` when nothing remains.
     """
     if mesh is None:
+        print("No mesh to unload")
         return
 
     if ps.has_surface_mesh(name):
         ps.remove_surface_mesh(name)
 
-    index = list(default_app.meshes).index(name)
-    default_app.meshes.pop(name, None)
+    index = list(app.meshes).index(name)
+    app.meshes.pop(name, None)
 
-    remaining = list(default_app.meshes)
+    remaining = list(app.meshes)
     if remaining:
-        default_app.ui_state["Selected Name"] = remaining[min(index, len(remaining) - 1)]
+        app.user_interface_state.selected_mesh = remaining[min(index, len(remaining) - 1)]
     else:
-        default_app.ui_state["Selected Name"] = "<none>"
+        app.user_interface_state.selected_mesh = "<none>"
 
 @aux.timed(True)
 @aux.memory(True)
 def save_mesh(new_name: str):
+    """Export the working mesh to an STL file.
+
+    Parameters
+    ----------
+    new_name : str
+        Filename stem. ``".stl"`` is appended, and the file is written
+        relative to the current working directory.
+
+    Raises
+    ------
+    KeyError
+        If no mesh is selected. The call site in :func:`callback` is guarded
+        by a non-empty mesh list, so this only fires if called directly.
+
+    Side Effects
+    ------------
+    Writes a file, overwriting any existing one without warning.
     """
-    Function to save a mesh to stl
-    """
-    name = default_app.ui_state["Selected Name"]
-    mesh = default_app.meshes.get(name)
-    assert isinstance(mesh,MeshObject)
-    mesh.Geometry.export(new_name + ".stl")
+    name = app.user_interface_state.selected_mesh
+    mesh = app.meshes[name]
+    mesh.trimesh_object.export(new_name + ".stl")
 
 @operation("Compute Mesh Triangle Data")
-def _op_compute_triangle_data(mesh, ps_mesh):
-    if default_app.app_settings["APP_DEBUG"]:
-        print(f"Computing Mesh Triangle Data on {default_app.ui_state['Selected Name']}")
-    assert isinstance(mesh, MeshObject)
-    assert isinstance(ps_mesh, ps.SurfaceMesh)
+def _op_compute_triangle_data(mesh: Geometry, ps_mesh):
+    """Compute per-face geometry and display area and height.
+
+    Side Effects
+    ------------
+    Populates the mesh facet values; adds "Facet Area" (faces) and "Height"
+    (vertices) to the Polyscope structure.
+
+    Notes
+    -----
+    Height is the raw Z coordinate, so it is only meaningful when ``up_dir``
+    is ``"z_up"``. Area is floored at 0.0 rather than at its minimum, so the
+    colour map reads as an absolute scale.
+    """
+    if app.user_interface_state.debug:
+        print(f"Computing Mesh Triangle Data on {app.user_interface_state.selected_mesh}")
+
     mesh.compute_mesh_facet_values()
-    assert mesh.FacetAreas is not None
-    ps_mesh.add_scalar_quantity("area",
+    # We know for a fact that mesh.facet_areas will never be 'none' after calling a compute_*() method
+    assert mesh.facet_areas is not None
+
+    ps_mesh.add_scalar_quantity("Facet Area",
                                 defined_on= 'faces',
-                                values= mesh.FacetAreas, # type: ignore
-                                vminmax= (0.0, mesh.FacetAreas.max()))
-    ps_mesh.add_scalar_quantity("height",
+                                values= mesh.facet_areas,
+                                vminmax= (0.0, mesh.facet_areas.max()))
+    ps_mesh.add_scalar_quantity("Height",
                                 defined_on= 'vertices',
-                                values= mesh.Geometry.vertices[:, 2],
-                                vminmax= (mesh.Geometry.vertices[:, 2].min(),
-                                          mesh.Geometry.vertices[:, 2].max()))
+                                values= mesh.trimesh_object.vertices[:, 2],
+                                vminmax= (mesh.trimesh_object.vertices[:, 2].min(),
+                                          mesh.trimesh_object.vertices[:, 2].max()))
 
 @operation("Compute Mesh Dots vs FLOOR")
-def _op_compute_dots(mesh, ps_mesh):
-    if default_app.app_settings["APP_DEBUG"]:
-        print(f"Computing Facet Dot Data on {default_app.ui_state['Selected Name']}")
-    assert isinstance(mesh, MeshObject)
-    assert isinstance(ps_mesh, ps.SurfaceMesh)
-    mesh.compute_mesh_facet_direction(reference = default_app.reference_vectors["FLOOR"])
-    assert mesh.FacetDots is not None
-    ps_mesh.add_scalar_quantity("DOT",
-                                defined_on='faces',
-                                values=mesh.FacetDots, # type: ignore
-                                vminmax=(mesh.FacetDots.min(), mesh.FacetDots.max()))
-    if mesh.Angles is not None:
-        ps_mesh.add_scalar_quantity("Angle",
-                                    defined_on='faces',
-                                    values=np.rad2deg(mesh.Angles),
-                                    vminmax=(np.rad2deg(mesh.Angles).min(),
-                                             np.rad2deg(mesh.Angles).max()))
+def _op_compute_dots(mesh: Geometry, ps_mesh):
+    """Compare face normals against the FLOOR reference direction.
+
+    Stores the result under a named key on the mesh, so results for several
+    reference directions can coexist, and displays both the dot product and
+    the angle in degrees.
+
+    Side Effects
+    ------------
+    Writes ``mesh.facet_dots["wrt Floor"]``; adds "DOT wrt Floor" and
+    "Angles wrt Floor" to the Polyscope structure, both defined on faces.
+
+    Notes
+    -----
+    The reference is currently the hardcoded ``"FLOOR"`` key, which will raise
+    ``KeyError`` once the user can rename or delete palette entries. The
+    reference should become an argument passed from the selection; see
+    :class:`UserInterfaceState`.
+    """
+    if app.user_interface_state.debug:
+        print(f"Computing Facet Dot Data on {app.user_interface_state.selected_mesh}")
+
+    reference_name = "wrt Floor"
+    mesh.compute_mesh_facet_direction(name = reference_name,reference = app.user_interface_state.reference_vectors["FLOOR"])
+
+    result = mesh.facet_dots[reference_name]
+    dots = result["dots"]
+
+    ps_mesh.add_scalar_quantity(f"DOT {reference_name}",
+                                defined_on = 'faces',
+                                values = dots,
+                                vminmax = (dots.min(), dots.max()))
+
+    if result["angles"] is not None:
+        angles_in_degs = np.rad2deg(result["angles"])
+        ps_mesh.add_scalar_quantity(f"Angles {reference_name}",
+                                    defined_on = 'faces',
+                                    values = angles_in_degs,
+                                    vminmax = (angles_in_degs.min(),
+                                               angles_in_degs.max()))
 
 @operation("Compute normal directions")
-def _op_show_normals(mesh, ps_mesh):
-    if default_app.app_settings["APP_DEBUG"]:
-        print(f"Showing normal directions on {default_app.ui_state['Selected Name']}")
-    assert isinstance(mesh, MeshObject)
-    assert isinstance(ps_mesh, ps.SurfaceMesh)
+def _op_compute_normals(mesh: Geometry, ps_mesh):
+    """Display face normals as vectors and as RGB colours.
 
-    if mesh.FacetNormals is None:
+    Computes the facet values first if they are unset, so the button works
+    regardless of the order the user clicks things in.
+
+    Side Effects
+    ------------
+    May populate the mesh facet values; adds a "Normal direction" vector
+    quantity and a "normal directions" colour quantity, both on faces.
+
+    Notes
+    -----
+    The colour mapping is ``(n + 1) / 2``, which sends each component from
+    [-1, 1] into [0, 1] -- the usual normal-map encoding. Opposing faces come
+    out as complementary colours.
+    """
+    if app.user_interface_state.debug:
+        print(f"Showing normal directions on {app.user_interface_state.selected_mesh}")
+
+    if mesh.facet_normals is None:
         mesh.compute_mesh_facet_values()
-
-    assert mesh.FacetNormals is not None
+    # Since we hace checked that is not None and if it is none we have computed them
+    assert mesh.facet_normals is not None
 
     ps_mesh.add_vector_quantity(name="Normal direction",
-                                values= mesh.FacetNormals,
+                                values= mesh.facet_normals,
                                 defined_on="faces")
     ps_mesh.add_color_quantity(name="normal directions",
                                defined_on="faces",
-                               values=( mesh.FacetNormals + 1.0) / 2.0)
+                               values=(mesh.facet_normals + 1.0) / 2.0)
 
 @operation("Compute Vertex Error")
-def _op_compute_curvature(mesh,ps_mesh):
-    if default_app.app_settings["APP_DEBUG"]:
-        print(f"Computing vertex error on {default_app.ui_state["Selected Name"]} mesh")
-    assert isinstance(mesh, MeshObject)
-    assert isinstance(ps_mesh, ps.SurfaceMesh)
+def _op_compute_curvature(mesh: Geometry,ps_mesh):
+    """Compute and display the per-vertex angle defect.
+
+    The discrete Gaussian curvature: ``2*pi`` minus the corner angles meeting
+    at each vertex.
+
+    Side Effects
+    ------------
+    Populates ``mesh.vertex_defects`` and ``mesh.vertex_angles``; adds
+    "Vertex Defect" to the Polyscope structure, defined on vertices.
+
+    Raises
+    ------
+    AssertionError
+        Propagated from :meth:`Geometry.compute_mesh_vertex_defect` when the
+        result disagrees with the ``trimesh`` reference. That oracle is
+        deliberate -- a failure here means the curvature code is wrong, not
+        that the mesh is unusual.
+    """
+    if app.user_interface_state.debug:
+        print(f"Computing vertex error on {app.user_interface_state.selected_mesh} mesh")
     mesh.compute_mesh_vertex_defect()
-    assert mesh.vertex_defect is not None
-    ps_mesh.add_scalar_quantity("vertex Defect",
+    # Since we just cumputed them, we know they are not none
+    assert mesh.vertex_defects is not None
+    ps_mesh.add_scalar_quantity("Vertex Defect",
                                 defined_on = 'vertices',
-                                values = mesh.vertex_defect,
-                                vminmax= (mesh.vertex_defect.min(),
-                                          mesh.vertex_defect.max()))
+                                values = mesh.vertex_defects,
+                                vminmax = (mesh.vertex_defects.min(),
+                                          mesh.vertex_defects.max()))
 
 ## Callback definition
 @aux.timed(False)
 @aux.memory(False)
 def callback():
-    """
-    Constructs all the polyscope buttons
+    """Draw the entire custom UI. Runs once per frame.
+
+    Polyscope invokes this at roughly the frame rate, so it must stay cheap.
+    Every widget is rebuilt from scratch on each call -- that is what
+    immediate mode means -- and any real work belongs behind a button guard.
+
+    Side Effects
+    ------------
+    Draws widgets and writes their values back into
+    ``app.user_interface_state``. Button presses invoke :func:`load_mesh`,
+    :func:`unload_mesh`, :func:`save_mesh`, or a registered operation.
+
+    Notes
+    -----
+    The combo index is derived from ``selected_mesh`` every frame rather than
+    stored, so loading or unloading a mesh cannot desynchronise the name from
+    the index. Timing is disabled on this function deliberately: at frame rate
+    it would flood the log.
     """
     # Debug mode On/Off
-    changed, default_app.app_settings["APP_DEBUG"] = imgui.checkbox(default_app.app_settings["APP_DEBUG"],
-                                                                    "Debug Mode")
+    changed, app.user_interface_state.debug = imgui.checkbox(app.user_interface_state.debug,
+                                                             "Debug Mode")
     if changed:
-        print(f"App changed to {default_app.app_settings["APP_DEBUG"]}")
-        if not default_app.app_settings["APP_DEBUG"]:
+        print(f"App changed to {app.user_interface_state.debug}")
+        if not app.user_interface_state.debug:
             ps.set_verbosity(0)
         else:
-            ps.set_verbosity(default_app.ps_settings["PS_VERBOSITY"])
+            ps.set_verbosity(app.polyscope_settings.verbosity)
 
     imgui.separator()
 
@@ -480,29 +610,31 @@ def callback():
             print("failed to load mesh as:")
             print(e)
     imgui.same_line()
-    if imgui.button(f"Unload {default_app.ui_state['Selected Name']} mesh"):
+    if imgui.button(f"Unload {app.user_interface_state.selected_mesh} mesh"):
         name, mesh, ps_mesh = retrieve_mesh()
         unload_mesh(name, mesh)
         ps.reset_camera_to_home_view()
 
     # Controls selected mesh # TODO: Evaluate if this is the most effective way to operate this step
-    mesh_names = list(default_app.meshes.keys())
+    mesh_names = list(app.meshes.keys())
     if mesh_names:
-        selected = default_app.ui_state["Selected Name"]
+        selected = app.user_interface_state.selected_mesh
         index = mesh_names.index(selected) if selected in mesh_names else 0
         changed, index = imgui.combo("Working Mesh", index, mesh_names)
         if changed:
-            default_app.ui_state["Selected Name"] = mesh_names[index]
+            app.user_interface_state.selected_mesh = mesh_names[index]
         ## Save a mesh
-        _, default_app.ui_state["Save Mesh Name"] = imgui.input_text(default_app.ui_state["Save Mesh Name"], label = "New Mesh Name")
+        _, app.user_interface_state.save_mesh_name = imgui.input_text(
+            app.user_interface_state.save_mesh_name,
+            label = "New Mesh Name")
         if imgui.button("Save Mesh"):
-            save_mesh(default_app.ui_state["Save Mesh Name"])
+            save_mesh(app.user_interface_state.save_mesh_name)
             print("save mesh")
 
     imgui.separator()
 
     # All @operation buttons render here
-    for label, fn in default_app.operations.items():
+    for label, fn in app.operations.items():
         if imgui.button(label):
             name, mesh, ps_mesh = retrieve_mesh()
             if mesh is not None:
@@ -511,23 +643,54 @@ def callback():
     imgui.separator()
 
 ## Initialize Polyscope, has fallback
-def polyscope_app_init(pre_load = None):
-    """
-    controls the initialization of polyscope for ddg main
-    """
+def polyscope_app_init(pre_load = None, default_app = app):
+    """Initialize Polyscope, install the callback, and run the viewer.
 
+    Applies every field of ``polyscope_settings``, optionally pre-loads a
+    mesh, then blocks in ``ps.show()`` until the window closes.
+
+    Parameters
+    ----------
+    pre_load : str, optional
+        Mesh file to load before the window opens. Saves a dialog round-trip
+        when restarting repeatedly during development.
+    default_app : AppState, optional
+        State container to initialize from. Defaults to the module-level
+        ``app``. See Notes.
+
+    Returns
+    -------
+    default_app : AppState
+        The same container, returned after the session ends so a caller can
+        inspect what was loaded.
+
+    Raises
+    ------
+    SystemExit
+        If Polyscope fails to initialize.
+
+    Notes
+    -----
+    ``default_app`` is read only here. Every other function in this module --
+    :func:`load_mesh`, :func:`callback`, and the operations -- reads the
+    module-level ``app`` directly, so passing a different instance would apply
+    that instance's settings while the rest of the app kept using the global
+    one. Treat the parameter as unfinished rather than as working injection.
+    """
     try:
-        ps.init(backend = default_app.ps_settings["PS_BACKEND"])
-        ps.set_program_name(f"{default_app.app_settings["APP_NAME"]}. Version: {default_app.app_settings["APP_VERSION"]}")
-        ps.set_verbosity(default_app.ps_settings["PS_VERBOSITY"])
-        ps.set_max_fps(default_app.ps_settings["PS_MAX_FRAMERATE"])
-        ps.set_give_focus_on_show(default_app.ps_settings["PS_GIVE_FOCUS_ON_SHOW"])
-        ps.set_up_dir(default_app.ps_settings["PS_UP_DIR"])
-        ps.set_always_redraw(default_app.ps_settings["PS_SET_ALWAYS_REDRAW"])
-        ps.set_open_imgui_window_for_user_callback(default_app.ps_settings["PS_SET_OPEN_IMGUI_WINDOW_FOR_USER_CALLBACK"])
+        ps.init(default_app.polyscope_settings.backend)
+        ps.set_program_name(f"{default_app.app_settings.name}. Version: {default_app.app_settings.version}")
+        ps.set_verbosity(default_app.polyscope_settings.verbosity)
+        ps.set_max_fps(default_app.polyscope_settings.max_framerate)
+        ps.set_give_focus_on_show(default_app.polyscope_settings.give_focus_on_show)
+        ps.set_up_dir(default_app.polyscope_settings.up_dir)
+        ps.set_always_redraw(default_app.polyscope_settings.always_redraw)
+        ps.set_open_imgui_window_for_user_callback(default_app.polyscope_settings.open_imgui_window_for_user_callback)
 
-        if default_app.app_settings["APP_DEBUG"]:
-            pprint(f"Polyscope Initialized Correctly with settings: \n {default_app.app_settings}")
+        if default_app.user_interface_state.debug:
+            print(f"Polyscope Initialized Correctly with settings:\n"
+                  f"\n-{default_app.app_settings}\n"
+                  f"\n-{default_app.polyscope_settings}\n")
 
     except Exception as e:
         print(f"Polyscope Could Not Initialized Correctly:\n {e}")
@@ -542,7 +705,7 @@ def polyscope_app_init(pre_load = None):
 
     return default_app
 
-
+# Local testing
 if __name__ == "__main__":
     print("Local excecution protyping and testing")
 
