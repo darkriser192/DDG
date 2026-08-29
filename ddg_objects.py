@@ -4,6 +4,9 @@ for enforcing data flow and structure, and the matematical operations as functio
 """
 # import sys
 import pathlib as path
+#from dataclasses import dataclass, field
+from typing import Literal
+
 
 import numpy as np
 import scipy as sp
@@ -13,9 +16,9 @@ import trimesh
 import AuxFunctions as aux
 
 ### Global Variables
-DEBUG = True # Debug flag to print some items as I code
-TIMED = True # Debug flag to print time estimates of functions
-MEMORY = True # Debug flag for memory probing
+DEBUG = False # Debug flag to print some items as I code
+TIMED = False # Debug flag to print time estimates of functions
+MEMORY = False # Debug flag for memory probing
 ERR = 1e-8 # Defines a global error value for some computations
 
 ### Support Classes
@@ -79,20 +82,32 @@ class Geometry():
     is the exception: nothing calls it automatically, because nothing consumes
     the adjacency structures yet.
     """
-    def __init__(self, file_path: str, ) -> None:
-        # Extract the name of the object
-        self.name = path.Path(file_path).stem
-        self.path = file_path
-        print(self.name)
-        # Try to load the schene into the object
-        try:
-            trimesh_object = trimesh.load_mesh(file_path, force='mesh')
-            self.trimesh_object = trimesh_object
-        except Exception as e:
-            print(f"Trimesh failed to load {self.name}: \n {e}")
+    # Class constants
 
-        self.number_vertices = len(trimesh_object.vertices)
-        self.number_faces = len(trimesh_object.faces)
+    # Initialization sequence
+    def __init__(self, file_path: str | None, ) -> None:
+        if file_path is None:
+            vertices = [[0,0,0],[1,0,0],[0,1,0],[0,0,1]]
+            faces = [[0,2,1],[0,1,3],[0,3,2],[1,2,3]]
+            # edges_unique       [[0,1],[0,2],[1,2],[0,3],[1,3],[2,3]]
+            # faces_unique_edges [[1,2,0],[0,4,3],[3,5,1],[2,5,4]]
+            self.name = "Test Tetrahedron"
+            self.path = "<none>"
+            self.trimesh_object = trimesh.Trimesh(vertices=vertices,faces=faces)
+        else:
+            # Extract the name of the object
+            self.name = path.Path(file_path).stem
+            self.path = file_path
+            print(self.name)
+            # Try to load the schene into the object
+            try:
+                trimesh_object = trimesh.load_mesh(file_path, force='mesh')
+                self.trimesh_object = trimesh_object
+            except Exception as e:
+                print(f"Trimesh failed to load {self.name}: \n {e}")
+
+        self.number_vertices = len(self.trimesh_object.vertices)
+        self.number_faces = len(self.trimesh_object.faces)
 
         # Property pre-allocation/creation for reference later
         self.facet_normals = None
@@ -258,6 +273,29 @@ class Geometry():
 
         return report
 
+    @aux.timed(TIMED)
+    @aux.memory(MEMORY)
+    def geometry_star(self, coordinates: tuple[int,int,int], mode: Literal["vertex", "edge", "face", "all"] = "all"):
+        """
+        returns the Star surface combinatorial operator
+        """
+        #TODO: implement
+        match mode:
+            case "vertex":
+                print(f"\nClicked with {mode}:"
+                      f"\n- vertex id: {coordinates[0]}")
+            case "edge":
+                print(f"\nClicked with {mode}:"
+                      f"\n- edge id: {coordinates[1]}")
+            case "face":
+                print(f"\nClicked with {mode}:"
+                      f"\n- face id: {coordinates[2]}")
+            case "all":
+                print(f"\nClicked with {mode}:"
+                      f"\n- vertex id: {coordinates[0]}"
+                      f"\n- edge id: {coordinates[1]}"
+                      f"\n- face id: {coordinates[2]}")
+        
     @aux.timed(False)
     @aux.memory(False)
     def __repr__(self):
@@ -434,8 +472,8 @@ def check_normal_direction(normals, reference, angle = False):
 
     return dots, angles
 
-@aux.timed(False)
-@aux.memory(False)
+@aux.timed(TIMED)
+@aux.memory(MEMORY)
 def compute_gausian_curvature(edges, faces, num_verts):
     """
     Computes the per-vertex gausian curvature error
@@ -466,6 +504,37 @@ def compute_gausian_curvature(edges, faces, num_verts):
     gaussian_error = 2*np.pi - angle_sum
 
     return gaussian_error, corner_angles
+
+## Utility Functions #1 hand coded start, closure and link functions
+def reference_simplice_star(edges, face_edges, simplices):
+    """
+    For a simplictical complex it returns the 'star' operator of the defining arrays
+
+    
+    Retrieve the edges connected to a vertex referenced by integer ID
+    edges       : (E, 2) int, sorted low->high — the canonical edge list
+    face_edges  : (F, 3) int — each face's three edge indices, in winding order
+    simplices : (vertices, edges, faces) — a tuple of three sets of indices
+    """
+
+    pass
+
+def reference_simplice_closure(edges, face_edges, integer_id: int = 0):
+    """
+    Retrieve the triangles connected to a vertex referenced by integer ID
+    edges       : (E, 2) int, sorted low->high — the canonical edge list
+    face_edges  : (F, 3) int — each face's three edge indices, in winding order
+    """
+
+    pass
+
+def reference_simplice_link(edges, face_edges, integer_id: int = 0):
+    """
+    Retrieves the closed loop of edges sorrounding a vertex references by integer ID.
+    does not include the vertex itself on the loop
+    """
+
+    pass
 
 ## Generates an SDF from a mesh
 @aux.timed(TIMED)

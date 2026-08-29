@@ -37,6 +37,6 @@ if __name__ == "__main__":
         meshes = main(pre_load = DEFAULT_MESH)
         print(meshes)
     except Exception as e:
-        pprint(f"Main exited with unhandled exception:\n {e}")
+        print(f"Main exited with unhandled exception:\n {e}")
         sys.exit()
-    pprint("File self entry point end")
+    print("File self entry point end")

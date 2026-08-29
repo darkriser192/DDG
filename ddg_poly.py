@@ -14,8 +14,7 @@ https://polyscope.run/py/basics/interactive_UIs_and_animation/#sample-custom-ui
 # import os
 import sys
 from dataclasses import dataclass, field
-from typing import Literal
-#from pprint import pprint
+from typing import Literal, Tuple
 import numpy as np
 import polyscope as ps
 
@@ -142,7 +141,7 @@ class UserInterfaceState():
     :meth:`Geometry.compute_mesh_facet_direction` already takes ``(name,
     reference)`` for this.
     """
-    debug: bool = True
+    debug: bool = False
     auto_update: bool = True
     selected_mesh: str = "<none>"
     selected_idx: int = 0
@@ -160,6 +159,7 @@ class UserInterfaceState():
     secondary:dict = field(default_factory = lambda:{ # Used to store random things. but the goal is to move these into other fields or turn this into a usefull field
         "Source": np.array([4500.0,4500.0,4500.0]), # another thing to track locations will use to check direction from some other vector
         })
+    vertex_edge_face: Tuple[int,int,int] = (0,0,0)
 
 @dataclass
 class AppState():
@@ -363,6 +363,9 @@ def retrieve_mesh():
     mesh = app.meshes.get(name)
     if mesh is None:
         return None, None, None
+
+    assert isinstance(mesh, Geometry)
+
     return name, mesh, ps.get_surface_mesh(name)
 
 @aux.timed(True)
@@ -591,9 +594,9 @@ def callback():
     it would flood the log.
     """
     # Debug mode On/Off
-    changed, app.user_interface_state.debug = imgui.checkbox(app.user_interface_state.debug,
+    changed_debug, app.user_interface_state.debug = imgui.checkbox(app.user_interface_state.debug,
                                                              "Debug Mode")
-    if changed:
+    if changed_debug:
         print(f"App changed to {app.user_interface_state.debug}")
         if not app.user_interface_state.debug:
             ps.set_verbosity(0)
@@ -614,17 +617,21 @@ def callback():
         name, mesh, ps_mesh = retrieve_mesh()
         unload_mesh(name, mesh)
         ps.reset_camera_to_home_view()
+    imgui.same_line()
+    if imgui.button(f"Print {app.user_interface_state.selected_mesh} memory"):
+        #TODO: Needs to make mork, does not work at the moment
+        print("Not implemented")
 
     # Controls selected mesh # TODO: Evaluate if this is the most effective way to operate this step
     mesh_names = list(app.meshes.keys())
     if mesh_names:
         selected = app.user_interface_state.selected_mesh
         index = mesh_names.index(selected) if selected in mesh_names else 0
-        changed, index = imgui.combo("Working Mesh", index, mesh_names)
-        if changed:
+        changed_working, index = imgui.combo("Working Mesh", index, mesh_names)
+        if changed_working:
             app.user_interface_state.selected_mesh = mesh_names[index]
         ## Save a mesh
-        _, app.user_interface_state.save_mesh_name = imgui.input_text(
+        changed_new_mesh_name, app.user_interface_state.save_mesh_name = imgui.input_text(
             app.user_interface_state.save_mesh_name,
             label = "New Mesh Name")
         if imgui.button("Save Mesh"):
@@ -641,6 +648,15 @@ def callback():
                 fn(mesh, ps_mesh)
 
     imgui.separator()
+
+    # Do action on vertex id
+    # TODO: Chance to Int3 and title line
+    change_tuple, app.user_interface_state.vertex_edge_face = imgui.input_int3(app.user_interface_state.vertex_edge_face, "Vert, Edge, Face")
+
+    if imgui.button("Compute vertex's star"):
+        name, mesh, ps_mesh = retrieve_mesh()
+        
+        mesh.geometry_star(coordinates = app.user_interface_state.vertex_edge_face)
 
 ## Initialize Polyscope, has fallback
 def polyscope_app_init(pre_load = None, default_app = app):
@@ -699,7 +715,10 @@ def polyscope_app_init(pre_load = None, default_app = app):
     if pre_load is not None:
         load_mesh(pre_load)
 
-    ps.set_user_callback(callback)
+    try:
+        ps.set_user_callback(callback)
+    except Exception as e:
+        raise Exception(f"Failed to construct GUI. Polyscope returned: {e}") from e
 
     ps.show()
 

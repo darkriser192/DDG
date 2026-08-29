@@ -44,6 +44,18 @@ def input_text(variable, label: str = "Default Text"):
     """
     return imgui.InputText(label, variable)
 
+def input_int(variable, label: str = "Default Text"):
+    """
+    wrapper for ps.imgui.InputInt()
+    """
+    return imgui.InputInt(label, variable)
+
+def input_int3(variable, label: str = "Default Text"):
+    """
+    wrapper for ps.imgui.InputInt3()
+    """
+    return imgui.InputInt3(label, variable)
+
 def some_function():
     """
     to use later
