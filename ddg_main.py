@@ -11,12 +11,12 @@ import ddg_poly as ddg_p
 import AuxFunctions as aux
 
 ### Consts
-CLEAR = True
+CLEAR: bool = True
 
 ### Main Function
 @aux.timed(False)
 @aux.memory(True)
-def main(pre_load = None):
+def main(pre_load: str | None = None) -> ddg_p.AppState:
     """
     Main function separated for time socping and others
     """

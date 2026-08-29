@@ -7,14 +7,23 @@ import functools
 import tracemalloc
 import tkinter as tk
 from tkinter import filedialog
+from collections.abc import Callable
+from typing import Any, TypeVar, cast
 import psutil
 
+### Type Aliases
+# Bound to the decorated function itself, so `Callable[[F], F]` tells a type
+# checker the wrapper keeps the original signature. Without it every decorated
+# function degrades to (*args, **kwargs) and Pylance can no longer bind `self`
+# or check a call site.
+F = TypeVar("F", bound=Callable[..., Any])
+
 ### Global Variables
-LOGGER = {}
-_TK_ROOT = None # module-level, one hidden root for the whole process
+LOGGER: dict[str, float] = {}
+_TK_ROOT: tk.Tk | None = None # module-level, one hidden root for the whole process
 
 ### Probing Functions
-def timed(enabled=True):
+def timed(enabled: bool = True) -> Callable[[F], F]:
     """Time a function's execution and record the result in ``LOGGER``.
 
     Decorator factory. When ``enabled`` is True, wraps the target function so
@@ -42,9 +51,9 @@ def timed(enabled=True):
     Prints a ``[TIMER]`` line to stdout and writes ``LOGGER[func.__name__]``
     with the elapsed time in seconds.
     """
-    def decorator(func):
+    def decorator(func: F) -> F:
         @functools.wraps(func)  # Preserve function metadata
-        def wrapper(*args, **kwargs):
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
             if enabled:
                 start_time = time.perf_counter()
                 try:
@@ -57,10 +66,13 @@ def timed(enabled=True):
             else:
                 # Just run the function without timing
                 return func(*args, **kwargs)
-        return wrapper
+        # cast, not a lie: the wrapper accepts (*args, **kwargs) and forwards
+        # them unchanged, so it is call-compatible with `func` at runtime. The
+        # cast is what tells the checker so.
+        return cast(F, wrapper)
     return decorator
 
-def debugged(enabled=True):
+def debugged(enabled: bool = True) -> Callable[[F], F]:
     """Print a function's name and return value for quick debugging.
 
     Decorator factory. When ``enabled`` is True, wraps the target function so
@@ -88,11 +100,11 @@ def debugged(enabled=True):
     Unlike :func:`timed`, the return value is only printed on the ``enabled``
     branch; both branches return the wrapped function's result unchanged.
     """
-    def decorator(func):
+    def decorator(func: F) -> F:
         @functools.wraps(func)  # Preserve function metadata
-        def wrapper(*args, **kwargs):
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
             if enabled:
-                pprint(func.__name__) 
+                pprint(func.__name__)
                 r = func(*args, **kwargs)
                 print("[DEBUGGER Return]: \n")
                 pprint(r)
@@ -100,10 +112,10 @@ def debugged(enabled=True):
             else:
                 # Just run the function
                 return func(*args, **kwargs)
-        return wrapper
+        return cast(F, wrapper)
     return decorator
 
-def memory(enabled=True, peak=False):
+def memory(enabled: bool = True, peak: bool = False) -> Callable[[F], F]:
     """Report a function's resident-memory change, and optionally Python peak.
 
     Decorator factory. When ``enabled`` is True, wraps the target function so
@@ -140,9 +152,9 @@ def memory(enabled=True, peak=False):
     :func:`timed`, the metric is printed only and not stored in ``LOGGER``.
     """
     _proc = psutil.Process(os.getpid())
-    def decorator(func):
+    def decorator(func: F) -> F:
         @functools.wraps(func)
-        def wrapper(*args, **kwargs):
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
             if not enabled:
                 return func(*args, **kwargs)
             if peak:
@@ -158,10 +170,10 @@ def memory(enabled=True, peak=False):
                     tracemalloc.stop()
                     msg += f"  py-peak {pk/1e9:.2f} GB"
                 print(msg)
-        return wrapper
+        return cast(F, wrapper)
     return decorator
 
-def clear_terminal():
+def clear_terminal() -> None:
     """Clear the terminal screen, cross-platform.
 
     Issues the platform-appropriate clear command: ``cls`` on Windows
@@ -177,18 +189,18 @@ def clear_terminal():
     """
     os.system('cls' if os.name == 'nt' else 'clear')
 
-def python_version():
+def python_version() -> dict[str, Any]:
     """
     Recovers python implementation and version information
     """
-    python = {"platform": sys.platform,
+    python: dict[str, Any] = {"platform": sys.platform,
               "implementation": sys.implementation,
               "version information": sys.version_info,
               "version": sys.version}
     return python
 
 ### Read file string
-def _get_tk_root():
+def _get_tk_root() -> tk.Tk:
     """Return the process-wide hidden Tk root, creating it once on first use."""
     global _TK_ROOT
     if _TK_ROOT is None:
@@ -196,7 +208,7 @@ def _get_tk_root():
         _TK_ROOT.withdraw()
     return _TK_ROOT
 
-def read_file():
+def read_file() -> str | None:
     """Open a file-picker dialog and return the chosen path.
 
     Spins up a hidden Tk root window, shows a native "open file" dialog via

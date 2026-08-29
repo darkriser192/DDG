@@ -14,19 +14,26 @@ https://polyscope.run/py/basics/interactive_UIs_and_animation/#sample-custom-ui
 # import os
 import sys
 from dataclasses import dataclass, field
-from typing import Literal, Tuple
+from collections.abc import Callable
+from typing import Any, Literal
 import numpy as np
 import polyscope as ps
 
 import ddg_objects as ddg_obj
-from ddg_objects import Geometry
+from ddg_objects import Geometry, FloatArray
 import ps_wrappers as imgui
 import AuxFunctions as aux
 
+## Type Aliases
+# What the @operation registry stores: every button handler takes the working
+# mesh and its Polyscope twin, and reports through the viewer rather than a
+# return value.
+Operation = Callable[[Geometry, ps.SurfaceMesh], None]
+
 ## Consts
-TIMED = ddg_obj.TIMED
-MEMORY = ddg_obj.MEMORY
-ERR = ddg_obj.ERR
+TIMED: bool = ddg_obj.TIMED
+MEMORY: bool = ddg_obj.MEMORY
+ERR: float = ddg_obj.ERR
 
 @dataclass(frozen = True)
 class AppSettings():
@@ -51,7 +58,7 @@ class AppSettings():
     name: str = "Discrete Differential Geometry Toolkit"
     version: str = "0.0.2"
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if not self.version:
             raise ValueError("Version Must Be Set")
 
@@ -147,7 +154,7 @@ class UserInterfaceState():
     selected_idx: int = 0
     save_mesh_name: str = "Default Mesh Name"
     # working_directory: str =  #TODO: how do i get the local running folder? or set up one. This is a question Matthias always asks
-    reference_vectors: dict = field(default_factory = lambda:{ # Not Frozen so we can mutate this dictionary later
+    reference_vectors: dict[str, FloatArray] = field(default_factory = lambda:{ # Not Frozen so we can mutate this dictionary later
         "UP": np.array([0.0,0.0,1.0]), # +Z-axis
         "DOWN": -1 * np.array([0.0,0.0,1.0]), # -Z-axis
         "RIGHT": np.array([1.0,0.0,0.0]), # +X-axis
@@ -156,10 +163,10 @@ class UserInterfaceState():
         "FRONT": -1.0 * np.array([0.0,1.0,0.0]), # -Y-axis
         "FLOOR": np.array([0.0,0.0,1.0]), # Direction of the floor
         })
-    secondary:dict = field(default_factory = lambda:{ # Used to store random things. but the goal is to move these into other fields or turn this into a usefull field
+    secondary:dict[str, Any] = field(default_factory = lambda:{ # Used to store random things. but the goal is to move these into other fields or turn this into a usefull field
         "Source": np.array([4500.0,4500.0,4500.0]), # another thing to track locations will use to check direction from some other vector
         })
-    vertex_edge_face: Tuple[int,int,int] = (0,0,0)
+    vertex_edge_face: tuple[int,int,int] = (0,0,0)
 
 @dataclass
 class AppState():
@@ -210,9 +217,9 @@ class AppState():
     polyscope_settings: PolyscopeSettings = field(default_factory=PolyscopeSettings)
     user_interface_state: UserInterfaceState = field(default_factory=UserInterfaceState)
 
-    meshes: dict = field(default_factory=dict)
-    operations: dict = field(default_factory=dict)
-    transforms: dict = field(default_factory=dict)
+    meshes: dict[str, Geometry] = field(default_factory=dict)
+    operations: dict[str, Operation] = field(default_factory=dict)
+    transforms: dict[str, Any] = field(default_factory=dict)
 
     generation: int = 0
 
@@ -225,7 +232,7 @@ class AppState():
 
 app = AppState()
 
-def operation(label):
+def operation(label: str) -> Callable[[Operation], Operation]:
     """Register a function as a button in the operations panel.
 
     Decorator factory. The decorated function is stored in ``app.operations``
@@ -256,14 +263,14 @@ def operation(label):
     ... def _op_areas(mesh, ps_mesh):
     ...     mesh.compute_mesh_facet_values()
     """
-    def deco(fn):
+    def deco(fn: Operation) -> Operation:
         app.operations[label] = fn
         return fn
     return deco
 
 @aux.timed(TIMED)
 @aux.memory(MEMORY)
-def load_mesh(file_path = None):
+def load_mesh(file_path: str | None = None) -> None:
     """Load a mesh from disk and register it with Polyscope.
 
     Builds a :class:`Geometry`, stores it in ``app.meshes`` keyed by the file
@@ -341,7 +348,7 @@ def load_mesh(file_path = None):
 
 @aux.timed(True)
 @aux.memory(True)
-def retrieve_mesh():
+def retrieve_mesh() -> tuple[str, Geometry, ps.SurfaceMesh] | tuple[None, None, None]:
     """Fetch the working mesh together with its Polyscope counterpart.
 
     Returns
@@ -356,8 +363,10 @@ def retrieve_mesh():
     Notes
     -----
     The three values are None together, so a caller may test any one of them.
-    Returning the name alongside saves callers a second lookup when they need
-    it for a label or a message.
+    The return type says so as a union of two whole tuples rather than three
+    independent ``| None`` slots, so a checker narrows all three at once from a
+    single test. Returning the name alongside saves callers a second lookup
+    when they need it for a label or a message.
     """
     name = app.user_interface_state.selected_mesh
     mesh = app.meshes.get(name)
@@ -370,7 +379,7 @@ def retrieve_mesh():
 
 @aux.timed(True)
 @aux.memory(True)
-def unload_mesh(name, mesh):
+def unload_mesh(name: str | None, mesh: Geometry | None) -> None:
     """Remove a mesh from Polyscope and from the app state.
 
     Picks a replacement afterwards so the working mesh stays valid: the entry
@@ -409,7 +418,7 @@ def unload_mesh(name, mesh):
 
 @aux.timed(True)
 @aux.memory(True)
-def save_mesh(new_name: str):
+def save_mesh(new_name: str) -> None:
     """Export the working mesh to an STL file.
 
     Parameters
@@ -433,7 +442,7 @@ def save_mesh(new_name: str):
     mesh.trimesh_object.export(new_name + ".stl")
 
 @operation("Compute Mesh Triangle Data")
-def _op_compute_triangle_data(mesh: Geometry, ps_mesh):
+def _op_compute_triangle_data(mesh: Geometry, ps_mesh: ps.SurfaceMesh) -> None:
     """Compute per-face geometry and display area and height.
 
     Side Effects
@@ -465,7 +474,7 @@ def _op_compute_triangle_data(mesh: Geometry, ps_mesh):
                                           mesh.trimesh_object.vertices[:, 2].max()))
 
 @operation("Compute Mesh Dots vs FLOOR")
-def _op_compute_dots(mesh: Geometry, ps_mesh):
+def _op_compute_dots(mesh: Geometry, ps_mesh: ps.SurfaceMesh) -> None:
     """Compare face normals against the FLOOR reference direction.
 
     Stores the result under a named key on the mesh, so results for several
@@ -507,7 +516,7 @@ def _op_compute_dots(mesh: Geometry, ps_mesh):
                                                angles_in_degs.max()))
 
 @operation("Compute normal directions")
-def _op_compute_normals(mesh: Geometry, ps_mesh):
+def _op_compute_normals(mesh: Geometry, ps_mesh: ps.SurfaceMesh) -> None:
     """Display face normals as vectors and as RGB colours.
 
     Computes the facet values first if they are unset, so the button works
@@ -540,7 +549,7 @@ def _op_compute_normals(mesh: Geometry, ps_mesh):
                                values=(mesh.facet_normals + 1.0) / 2.0)
 
 @operation("Compute Vertex Error")
-def _op_compute_curvature(mesh: Geometry,ps_mesh):
+def _op_compute_curvature(mesh: Geometry, ps_mesh: ps.SurfaceMesh) -> None:
     """Compute and display the per-vertex angle defect.
 
     The discrete Gaussian curvature: ``2*pi`` minus the corner angles meeting
@@ -573,7 +582,7 @@ def _op_compute_curvature(mesh: Geometry,ps_mesh):
 ## Callback definition
 @aux.timed(False)
 @aux.memory(False)
-def callback():
+def callback() -> None:
     """Draw the entire custom UI. Runs once per frame.
 
     Polyscope invokes this at roughly the frame rate, so it must stay cheap.
@@ -644,7 +653,9 @@ def callback():
     for label, fn in app.operations.items():
         if imgui.button(label):
             name, mesh, ps_mesh = retrieve_mesh()
-            if mesh is not None:
+            # Both tested, not just `mesh`: unpacking the union return loses the
+            # "None together" link, so a checker needs each name proved on its own.
+            if mesh is not None and ps_mesh is not None:
                 fn(mesh, ps_mesh)
 
     imgui.separator()
@@ -659,7 +670,7 @@ def callback():
         mesh.geometry_star(coordinates = app.user_interface_state.vertex_edge_face)
 
 ## Initialize Polyscope, has fallback
-def polyscope_app_init(pre_load = None, default_app = app):
+def polyscope_app_init(pre_load: str | None = None, default_app: AppState = app) -> AppState:
     """Initialize Polyscope, install the callback, and run the viewer.
 
     Applies every field of ``polyscope_settings``, optionally pre-loads a

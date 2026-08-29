@@ -5,21 +5,40 @@ for enforcing data flow and structure, and the matematical operations as functio
 # import sys
 import pathlib as path
 #from dataclasses import dataclass, field
-from typing import Literal
+from collections.abc import Sequence
+from typing import Literal, TypedDict
 
 
 import numpy as np
+import numpy.typing as npt
 import scipy as sp
 import trimesh
 
 ### Custom Imports
 import AuxFunctions as aux
 
+### Type Aliases
+# Arrays carry a dtype but no shape: numpy shape typing is still provisional and
+# most operations erase it. Shapes stay documented in the docstrings.
+FloatArray = npt.NDArray[np.float64]
+IntArray = npt.NDArray[np.int64]
+SparseMatrix = sp.sparse.csr_matrix
+
+class FacetDots(TypedDict):
+    """One entry of ``Geometry.facet_dots``: the comparison against one reference.
+
+    A ``TypedDict`` rather than a plain ``dict`` so that ``result["dots"]`` reads
+    back as an array while ``result["angles"]`` keeps its ``None`` case, instead
+    of both collapsing to the same union.
+    """
+    dots: FloatArray
+    angles: FloatArray | None
+
 ### Global Variables
-DEBUG = False # Debug flag to print some items as I code
-TIMED = False # Debug flag to print time estimates of functions
-MEMORY = False # Debug flag for memory probing
-ERR = 1e-8 # Defines a global error value for some computations
+DEBUG: bool = False # Debug flag to print some items as I code
+TIMED: bool = False # Debug flag to print time estimates of functions
+MEMORY: bool = False # Debug flag for memory probing
+ERR: float = 1e-8 # Defines a global error value for some computations
 
 ### Support Classes
 class Geometry():
@@ -83,6 +102,26 @@ class Geometry():
     the adjacency structures yet.
     """
     # Class constants
+
+    # Attribute declarations. These bind no value -- they only tell a type
+    # checker what each attribute holds once a compute_* method has run, which
+    # is what makes `assert x is not None` narrow to a usable array downstream.
+    name: str
+    path: str
+    trimesh_object: trimesh.Trimesh
+    number_vertices: int
+    number_faces: int
+    facet_normals: FloatArray | None
+    normal_magnitude: FloatArray | None
+    facet_areas: FloatArray | None
+    face_centers: FloatArray | None
+    edges: FloatArray | None
+    facet_dots: dict[str, FacetDots]
+    vertex_defects: FloatArray | None
+    vertex_angles: FloatArray | None
+    face_face_adjacency: SparseMatrix | None
+    vertex_vertex_adjacency: SparseMatrix | None
+    vertex_face_adjacency: IntArray | None
 
     # Initialization sequence
     def __init__(self, file_path: str | None, ) -> None:
@@ -165,7 +204,7 @@ class Geometry():
     # To be used by a callback or other call operation instead of doing at __init__
     @aux.timed(TIMED)
     @aux.memory(MEMORY)
-    def compute_mesh_facet_values(self):
+    def compute_mesh_facet_values(self) -> None:
         """Compute and store the per-face geometric quantities.
 
         Thin wrapper over :func:`compute_triangle_data`.
@@ -179,7 +218,10 @@ class Geometry():
 
     @aux.timed(TIMED)
     @aux.memory(MEMORY)
-    def compute_mesh_facet_direction(self, name:str, reference = np.array([0.0,0.0,1.0]), angle = True):
+    def compute_mesh_facet_direction(self,
+                                     name: str,
+                                     reference: FloatArray = np.array([0.0,0.0,1.0]),
+                                     angle: bool = True) -> None:
         """Compare face normals against one named reference direction.
 
         Thin wrapper over :func:`check_normal_direction`. Computes
@@ -205,15 +247,17 @@ class Geometry():
         """
         if self.facet_normals is None:
             self.compute_mesh_facet_values()
+        # The call above sets it; the assert is what lets the checker see that.
+        assert self.facet_normals is not None
 
         dots, angles = check_normal_direction(self.facet_normals , reference, angle = angle)
 
-        values = {"dots":dots, "angles":angles}
+        values: FacetDots = {"dots":dots, "angles":angles}
         self.facet_dots[name] = values
 
     @aux.timed(TIMED)
     @aux.memory(MEMORY)
-    def compute_mesh_vertex_defect(self):
+    def compute_mesh_vertex_defect(self) -> None:
         """Compute and store the per-vertex angle defect.
 
         The discrete Gaussian curvature at a vertex: ``2*pi`` minus the sum of
@@ -241,6 +285,8 @@ class Geometry():
         """
         if self.edges is None:
             self.compute_mesh_facet_values()
+        # The call above sets it; the assert is what lets the checker see that.
+        assert self.edges is not None
 
         self.vertex_defects, self.vertex_angles = compute_gausian_curvature(self.edges,
                                                                             self.trimesh_object.faces,
@@ -250,7 +296,7 @@ class Geometry():
 
     @aux.timed(TIMED)
     @aux.memory(MEMORY)
-    def mem_report(self) -> dict:
+    def mem_report(self) -> dict[str, float | None]:
         """
         Return the memory use of each stored attribute, in MB.
 
@@ -260,7 +306,7 @@ class Geometry():
             Attribute name -> size in MB, or None when the attribute holds no
             measurable buffer (strings, scalars, unset fields).
         """
-        report = {}
+        report: dict[str, float | None] = {}
         for name, value in vars(self).items():
             if isinstance(value, np.ndarray):
                 report[name] = value.nbytes / 1e6
@@ -275,7 +321,9 @@ class Geometry():
 
     @aux.timed(TIMED)
     @aux.memory(MEMORY)
-    def geometry_star(self, coordinates: tuple[int,int,int], mode: Literal["vertex", "edge", "face", "all"] = "all"):
+    def geometry_star(self,
+                      coordinates: tuple[int,int,int],
+                      mode: Literal["vertex", "edge", "face", "all"] = "all") -> None:
         """
         returns the Star surface combinatorial operator
         """
@@ -298,7 +346,7 @@ class Geometry():
         
     @aux.timed(False)
     @aux.memory(False)
-    def __repr__(self):
+    def __repr__(self) -> str:
         return (f"Geometry({self.name!r}\n - V = {self.number_vertices}\n - F = {self.number_faces})")
 
 class SDFObject():
@@ -306,7 +354,10 @@ class SDFObject():
     Data structure representing a functional Signed Distance Field, or 
     more generally a [signed] metric field
     """
-    def __init__(self, name, source) -> None:
+    name: str
+    source: str
+
+    def __init__(self, name: str, source: str) -> None:
         """
         Initialization values of the SDF, meant to "prepare" an SDF object prior to 
         actualy generating. Where a mesh comes from a file, an SDF is constructed in code
@@ -321,7 +372,7 @@ class SDFObject():
 ### Support Functions
 @aux.timed(TIMED)
 @aux.memory(MEMORY)
-def vector_values(vectors):
+def vector_values(vectors: FloatArray) -> tuple[FloatArray, FloatArray]:
     """
     Compute the magnitude and unit direction of a batch of vectors.
 
@@ -350,11 +401,12 @@ def vector_values(vectors):
     safe_mag = np.where(valid_mask, magnitude, 1.0)
     direction = vectors / safe_mag[:, np.newaxis]
     direction[~valid_mask] = 0.0
+
     return magnitude, direction
 
 @aux.timed(TIMED)
 @aux.memory(MEMORY)
-def compute_triangle_data(triangles):
+def compute_triangle_data(triangles: FloatArray) -> tuple[FloatArray, FloatArray, FloatArray, FloatArray]:
     """
     Compute per-face edges, normals, normal magnitudes, and areas.
 
@@ -407,7 +459,7 @@ def compute_triangle_data(triangles):
 
 @aux.timed(TIMED)
 @aux.memory(MEMORY)
-def compute_face_center_3d(vertex):
+def compute_face_center_3d(vertex: FloatArray) -> FloatArray:
     """Compute the centroid of each triangular face.
 
     Vectorized over all faces: averages the three corner vertices of each
@@ -431,7 +483,9 @@ def compute_face_center_3d(vertex):
 
 @aux.timed(TIMED)
 @aux.memory(MEMORY)
-def check_normal_direction(normals, reference, angle = False):
+def check_normal_direction(normals: FloatArray,
+                           reference: FloatArray,
+                           angle: bool = False) -> tuple[FloatArray, FloatArray | None]:
     """Compare face normals against a single reference direction.
 
     Computes the dot product of every normal with a reference vector and,
@@ -474,11 +528,13 @@ def check_normal_direction(normals, reference, angle = False):
 
 @aux.timed(TIMED)
 @aux.memory(MEMORY)
-def compute_gausian_curvature(edges, faces, num_verts):
+def compute_gausian_curvature(edges: FloatArray,
+                              faces: IntArray,
+                              num_verts: int) -> tuple[FloatArray, FloatArray]:
     """
     Computes the per-vertex gausian curvature error
     """
-    def corner_angle(a, b):
+    def corner_angle(a: FloatArray, b: FloatArray) -> FloatArray:
         _, a_n = vector_values(a)
         _, b_n = vector_values(b)
         cos = (a_n * b_n).sum(axis=1)
@@ -506,7 +562,9 @@ def compute_gausian_curvature(edges, faces, num_verts):
     return gaussian_error, corner_angles
 
 ## Utility Functions #1 hand coded start, closure and link functions
-def reference_simplice_star(edges, face_edges, simplices):
+def reference_simplice_star(edges: IntArray,
+                            face_edges: IntArray,
+                            simplices: tuple[IntArray, IntArray, IntArray]) -> None:
     """
     For a simplictical complex it returns the 'star' operator of the defining arrays
 
@@ -519,7 +577,9 @@ def reference_simplice_star(edges, face_edges, simplices):
 
     pass
 
-def reference_simplice_closure(edges, face_edges, integer_id: int = 0):
+def reference_simplice_closure(edges: IntArray,
+                               face_edges: IntArray,
+                               integer_id: int = 0) -> None:
     """
     Retrieve the triangles connected to a vertex referenced by integer ID
     edges       : (E, 2) int, sorted low->high — the canonical edge list
@@ -528,7 +588,9 @@ def reference_simplice_closure(edges, face_edges, integer_id: int = 0):
 
     pass
 
-def reference_simplice_link(edges, face_edges, integer_id: int = 0):
+def reference_simplice_link(edges: IntArray,
+                            face_edges: IntArray,
+                            integer_id: int = 0) -> None:
     """
     Retrieves the closed loop of edges sorrounding a vertex references by integer ID.
     does not include the vertex itself on the loop
@@ -551,7 +613,7 @@ def sdf_from_mesh(mesh_object: Geometry) -> SDFObject:
 ### Geometric Functions
 @aux.timed(TIMED)
 @aux.memory(MEMORY)
-def normalize(minmax,value):
+def normalize(minmax: Sequence[float], value: float | FloatArray) -> float | FloatArray:
     """Map a value onto the [0, 1] span defined by a (min, max) pair.
 
     Linear rescale reporting where ``value`` falls between ``minmax[0]`` and
