@@ -1,13 +1,16 @@
 """
 ddg_objects is the meant and potatoes of my ddg app containing objects
 for enforcing data flow and structure, and the matematical operations as functions
+
+References
+----------
+https://www.cs.cmu.edu/~kmcrane/Projects/DDG/
 """
 # import sys
 import pathlib as path
 #from dataclasses import dataclass, field
 from collections.abc import Sequence
 from typing import Literal, TypedDict
-
 
 import numpy as np
 import numpy.typing as npt
@@ -160,6 +163,7 @@ class Geometry():
         self.face_face_adjacency = None
         self.vertex_vertex_adjacency = None
         self.vertex_face_adjacency = None
+        self.gausian_curvature = None
 
     @aux.timed(TIMED)
     @aux.memory(MEMORY)
@@ -288,9 +292,10 @@ class Geometry():
         # The call above sets it; the assert is what lets the checker see that.
         assert self.edges is not None
 
-        self.vertex_defects, self.vertex_angles = compute_gausian_curvature(self.edges,
-                                                                            self.trimesh_object.faces,
-                                                                            self.number_vertices)
+        self.vertex_defects, self.vertex_angles, self.gausian_curvature = compute_gausian_curvature(
+            self.edges,
+            self.trimesh_object.faces,
+            self.number_vertices)
 
         assert np.allclose(self.vertex_defects, self.trimesh_object.vertex_defects, atol=ERR)
 
@@ -530,20 +535,22 @@ def check_normal_direction(normals: FloatArray,
 @aux.memory(MEMORY)
 def compute_gausian_curvature(edges: FloatArray,
                               faces: IntArray,
-                              num_verts: int) -> tuple[FloatArray, FloatArray]:
+                              num_verts: int) -> tuple[FloatArray, FloatArray, FloatArray]:
     """
     Computes the per-vertex gausian curvature error
     """
+    _, a_n = vector_values(edges[:,0])
+    _, b_n = vector_values(edges[:,1])
+    _, c_n = vector_values(edges[:,2])
+
     def corner_angle(a: FloatArray, b: FloatArray) -> FloatArray:
-        _, a_n = vector_values(a)
-        _, b_n = vector_values(b)
-        cos = (a_n * b_n).sum(axis=1)
+        cos = (a * b).sum(axis=1)
         return np.arccos(np.clip(cos, -1.0, 1.0))
 
     print("computing curvature edges")
-    angle0 = corner_angle( edges[:, 0], -edges[:, 2])   # at v0
-    angle1 = corner_angle(-edges[:, 0],  edges[:, 1])   # at v1
-    angle2 = corner_angle( edges[:, 2], -edges[:, 1])   # at v2
+    angle0 = corner_angle( a_n, -c_n)   # at v0
+    angle1 = corner_angle(-a_n,  b_n)   # at v1
+    angle2 = corner_angle( c_n, -b_n)   # at v2
     if DEBUG:
         print(f"angle0 (deg):\n {np.degrees(angle0)}")
         print(f"angle1 (deg):\n {np.degrees(angle1)}")
@@ -553,13 +560,17 @@ def compute_gausian_curvature(edges: FloatArray,
 
     assert np.allclose(corner_angles.sum(axis=1), np.pi, atol=1e-6)
 
-    angle_sum = np.bincount(faces.ravel(),
-                            weights=corner_angles.ravel(),
-                            minlength=num_verts)
+    angle_sum = np.bincount(
+        faces.ravel(),
+        weights =corner_angles.ravel(),
+        minlength =num_verts
+        )
 
     gaussian_error = 2*np.pi - angle_sum
 
-    return gaussian_error, corner_angles
+    ratio = (1 / (2*np.pi)) * gaussian_error 
+
+    return gaussian_error, corner_angles, ratio
 
 ## Utility Functions #1 hand coded start, closure and link functions
 def reference_simplice_star(edges: IntArray,
@@ -607,8 +618,7 @@ def sdf_from_mesh(mesh_object: Geometry) -> SDFObject:
     # TODO: No idea how thils will work but it will probably exist.
     # Not married to the idea
     """
-
-    return SDFObject(name="Default Name", source=mesh_object.name)
+    return SDFObject(name = "Default Name", source = mesh_object.name)
 
 ### Geometric Functions
 @aux.timed(TIMED)

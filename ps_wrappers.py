@@ -9,11 +9,10 @@ from collections.abc import Sequence
 from polyscope import imgui
 from polyscope import implot
 
-def button(label: str) -> bool:
-    """"
-    wrapper for ps.imgui.Button()
+def button(label: str, button_size: tuple[float, float] = (0.0, 0.0),) -> bool:
+    """"Wwrapper for ps.imgui.Button()
     """
-    return imgui.Button(label)
+    return imgui.Button(label, button_size)
 
 def separator() -> None:
     """
@@ -59,8 +58,30 @@ def input_int3(variable: Sequence[int],
     """
     return imgui.InputInt3(label, variable)
 
-def some_function() -> int:
+def slider_float(value: float,
+                 v_min: float | None,
+                 v_max: float | None,
+                 str_format: str = '%.3f', 
+                 label:str = "Default Slider",
+                 flags:int = 0) -> tuple[bool, float]:
     """
-    to use later
+    Wrapper for ps.imgui.SliderFloat
     """
-    return 0
+    if v_min is None:
+        v_min = -1000
+    if v_max is None:
+        v_max = 1000
+
+    return imgui.SliderFloat(label, value, v_min, v_max, str_format, flags)
+
+def input_float(
+        label: str,
+        value: float,
+        step: float = 0.0,
+        step_fast: float = 0.0,
+        string_format: str = '%.3f',
+        flags: int = 0,)-> tuple[bool, float]:
+    """
+    Wrapper for ps.imgui.Inputfloat
+    """
+    return imgui.InputFloat(label, value, step, step_fast, string_format, flags)

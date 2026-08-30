@@ -100,12 +100,13 @@ class PolyscopeSettings():
     directly, leaving this recipe untouched.
     """
     verbosity: int = 5
-    backend: Literal["auto", "openGL3_glfw", "openGL3_egl", "openGL_mock"] = "auto"
+    backend: Literal["auto", "openGL3_glfw", "openGL3_egl", "openGL_mock"] = "openGL3_glfw"
     max_framerate: int = 59
     give_focus_on_show: bool = True
     up_dir: str = "z_up"
     always_redraw: bool = True
-    open_imgui_window_for_user_callback:bool = True
+    open_imgui_window_for_user_callback: bool = True
+    set_automatically_compute_scene_extents: bool = True
 
 @dataclass(frozen = False)
 class UserInterfaceState():
@@ -166,6 +167,7 @@ class UserInterfaceState():
     secondary:dict[str, Any] = field(default_factory = lambda:{ # Used to store random things. but the goal is to move these into other fields or turn this into a usefull field
         "Source": np.array([4500.0,4500.0,4500.0]), # another thing to track locations will use to check direction from some other vector
         })
+    ui_scale: float = 0.80
     vertex_edge_face: tuple[int,int,int] = (0,0,0)
 
 @dataclass
@@ -322,6 +324,7 @@ def load_mesh(file_path: str | None = None) -> None:
         ps.reset_camera_to_home_view()
 
         if app.user_interface_state.debug:
+            # TODO : Change to a  method call later
             print(f"Loaded a mesh: {name}")
             g = mesh_object.vertex_vertex_adjacency
             print(f"verts={mesh_object.number_vertices}  faces={mesh_object.number_faces}")
@@ -329,7 +332,7 @@ def load_mesh(file_path: str | None = None) -> None:
                 print(f"vertex adjacency (sparse): shape {g.shape}, nnz {g.nnz}, {g.data.nbytes/1e6:.1f} MB")
             else:
                 print("No Adjacency computed")
-            attributes = vars(mesh_object) # TODO : Change to a  method call later
+            attributes = vars(mesh_object) 
             print("These are the attributes ", attributes)
             for attr in attributes:
                 o = getattr(mesh_object, attr, None)
@@ -403,7 +406,7 @@ def unload_mesh(name: str | None, mesh: Geometry | None) -> None:
     if mesh is None:
         print("No mesh to unload")
         return
-
+    assert name is not None
     if ps.has_surface_mesh(name):
         ps.remove_surface_mesh(name)
 
@@ -577,7 +580,12 @@ def _op_compute_curvature(mesh: Geometry, ps_mesh: ps.SurfaceMesh) -> None:
                                 defined_on = 'vertices',
                                 values = mesh.vertex_defects,
                                 vminmax = (mesh.vertex_defects.min(),
-                                          mesh.vertex_defects.max()))
+                                           mesh.vertex_defects.max()))
+    assert mesh.gausian_curvature is not None
+    ps_mesh.add_scalar_quantity("Gausian Curvature",
+                                defined_on = "vertices",
+                                values = mesh.gausian_curvature,
+                                vminmax = (-1,1))
 
 ## Callback definition
 @aux.timed(False)
@@ -611,6 +619,16 @@ def callback() -> None:
             ps.set_verbosity(0)
         else:
             ps.set_verbosity(app.polyscope_settings.verbosity)
+
+    chaged_ui_scale, app.user_interface_state.ui_scale = imgui.input_float(
+        value = app.user_interface_state.ui_scale,
+        label = "UI Scale")
+    if chaged_ui_scale:
+        if app.user_interface_state.ui_scale < 0.5:
+            app.user_interface_state.ui_scale = 0.5
+        if app.user_interface_state.ui_scale > 2.0:
+            app.user_interface_state.ui_scale = 2
+        ps.set_ui_scale(app.user_interface_state.ui_scale)
 
     imgui.separator()
 
@@ -707,13 +725,18 @@ def polyscope_app_init(pre_load: str | None = None, default_app: AppState = app)
     try:
         ps.init(default_app.polyscope_settings.backend)
         ps.set_program_name(f"{default_app.app_settings.name}. Version: {default_app.app_settings.version}")
+        ps.set_print_prefix(f"[{default_app.app_settings.name}]: \n-")
         ps.set_verbosity(default_app.polyscope_settings.verbosity)
         ps.set_max_fps(default_app.polyscope_settings.max_framerate)
         ps.set_give_focus_on_show(default_app.polyscope_settings.give_focus_on_show)
         ps.set_up_dir(default_app.polyscope_settings.up_dir)
         ps.set_always_redraw(default_app.polyscope_settings.always_redraw)
         ps.set_open_imgui_window_for_user_callback(default_app.polyscope_settings.open_imgui_window_for_user_callback)
-
+        # By default, app sets Geometry at origin of scene, this makes reflection weird. Need to create buttons to handle this
+        ps.set_automatically_compute_scene_extents(default_app.polyscope_settings.set_automatically_compute_scene_extents)
+        if default_app.polyscope_settings.set_automatically_compute_scene_extents is False:
+            ps.set_bounding_box((0.,0.,0.),(0.,0.,0.))
+        ps.set_ui_scale(default_app.user_interface_state.ui_scale)
         if default_app.user_interface_state.debug:
             print(f"Polyscope Initialized Correctly with settings:\n"
                   f"\n-{default_app.app_settings}\n"
