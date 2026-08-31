@@ -4,19 +4,21 @@ Owns everything the viewer needs: the :class:`AppState` container, the
 ``@operation`` button registry, mesh load/unload/save, and the per-frame
 :func:`callback`. The mathematics lives in ``ddg_objects``, which imports
 nothing from here -- the dependency runs one way only, so the math layer stays
-testable without a GUI.
+testable without a GUI.                                  
+
+Promise: A semantic CAD/geometry system whose mathematical foundation is DDG
 
 References
 ----------
 https://polyscope.run/py/basics/interactive_UIs_and_animation/#sample-custom-ui
 """
 ## Imports
-# import os
 import sys
 from dataclasses import dataclass, field
 from collections.abc import Callable
-from typing import Any, Literal
+from typing import Any, Literal, List
 import numpy as np
+import numpy.typing as npt
 import polyscope as ps
 
 import ddg_objects as ddg_obj
@@ -171,6 +173,18 @@ class UserInterfaceState():
     vertex_edge_face: tuple[int,int,int] = (0,0,0)
 
 @dataclass
+class Object():
+    """
+    Stub for semantic layer of interpretation
+    """
+    name: str # Natural language reference
+    geometry: Geometry # Contains the actual Geometry object
+    overhangs: List[npt.NDArray[np.int64]] # array of integer arrays for overhang faces
+    parents: dict[str, Object | None] # References to other object
+    children: dict[str, Object | None] # References to other object
+    generation: int = 0
+
+@dataclass
 class AppState():
     """Single container for all state owned by the Polyscope app layer.
 
@@ -220,6 +234,8 @@ class AppState():
     user_interface_state: UserInterfaceState = field(default_factory=UserInterfaceState)
 
     meshes: dict[str, Geometry] = field(default_factory=dict)
+    # TODO: for when we move meshes to new meshes
+    new_meshes: dict[int, Object | None] = field(default_factory=lambda: {1: None}) # TODO: placeholder
     operations: dict[str, Operation] = field(default_factory=dict)
     transforms: dict[str, Any] = field(default_factory=dict)
 

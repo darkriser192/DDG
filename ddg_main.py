@@ -1,8 +1,61 @@
 """
-Here goes a docstring
+Application entry point and imperative shell for the DDG toolkit.
+
+This module owns the Polyscope application layer: initialization, UI state,
+object registration, and orchestration of operations across the semantic
+object layer and the DDG functional/math core.
+
+The application layer interprets and coordinates mathematical objects rather
+than defining their mathematics. Semantic objects provide the domain-level
+contracts and relationships between representations and derived objects,
+while ddg_objects remains independent of the application layer.
+
+                         APP STATE
+                             │
+                    ┌────────┴────────┐
+                    │                 │
+              Imperative Shell        │
+                    │                 │
+        ┌───────────┼───────────┐     │
+        ▼           ▼           ▼     ▼
+    UI State    Object Registry   Initialization
+                                   Protocol
+                    │
+                    ▼
+             SEMANTIC OBJECTS
+                    │
+       ┌────────────┼────────────┐
+       ▼            ▼            ▼
+     Mesh        Support       Lattice
+       │            │            │
+       └────────────┼────────────┘
+                    │
+          Relationships / Contracts
+                    │
+          ┌─────────┴─────────┐
+          ▼                   ▼
+    DDG Objects          Representations
+ Functional / Math       Geometry / SDF / ...
+       Core                   │
+          │                   │
+          └─────────┬─────────┘
+                    ▼
+             Computational Core
+                    │
+                    ▼
+           ... Turtles all the
+              way down ...
+
+The dependency is intentionally one-way so that the DDG core can eventually
+serve applications beyond this Python/Polyscope implementation.
+
+References
+----------
+https://github.com/darkriser192/DDG
 """
 ### Imports
 import sys
+from importlib import metadata
 from pprint import pprint
 
 ### Custom Imports
@@ -11,7 +64,7 @@ import ddg_poly as ddg_p
 import AuxFunctions as aux
 
 ### Consts
-CLEAR: bool = True
+CLEAR: bool = False
 
 ### Main Function
 @aux.timed(False)
@@ -23,6 +76,9 @@ def main(pre_load: str | None = None) -> ddg_p.AppState:
     ## Clear the screen or perform any necessary initialization
     if CLEAR:
         aux.clear_terminal()
+        print(aux.python_version())
+        for dist in metadata.distributions():
+            print(f"{dist.metadata['Name']}=={dist.version}")
 
     app_state = ddg_p.polyscope_app_init(pre_load = pre_load)
 

@@ -2,6 +2,7 @@
 import os
 import sys
 import time
+from importlib import metadata
 from pprint import pprint
 import functools
 import tracemalloc

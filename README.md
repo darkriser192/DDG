@@ -1,5 +1,8 @@
 # DDG Toolkit
 
+**DDG should make geometry computation inspectable, composable, replaceable, and extensible—not merely executable.**
+
+
 An interactive mesh-analysis application built on [Polyscope](https://polyscope.run/),
 used as a working platform for discrete differential geometry.
 

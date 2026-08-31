@@ -2,6 +2,10 @@
 ddg_objects is the meant and potatoes of my ddg app containing objects
 for enforcing data flow and structure, and the matematical operations as functions
 
+Promise of the math: A collection of DDG algorithms.
+
+Promise of the objects: A geometric computational kernel built around DDG.
+
 References
 ----------
 https://www.cs.cmu.edu/~kmcrane/Projects/DDG/
@@ -44,6 +48,14 @@ MEMORY: bool = False # Debug flag for memory probing
 ERR: float = 1e-8 # Defines a global error value for some computations
 
 ### Support Classes
+class Surface():
+    """
+    TODO: In preparation of needing a surface class that does not need to be 
+    a none manifold object in 3D
+    """
+    def __init__(self, name: str = "Default Surafce Name") -> None:
+        self.name = name
+
 class Geometry():
     """
     Container for a triangle mesh and its discrete-geometry quantities.
