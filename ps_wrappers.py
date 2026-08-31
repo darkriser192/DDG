@@ -59,24 +59,20 @@ def input_int3(variable: Sequence[int],
     return imgui.InputInt3(label, variable)
 
 def slider_float(value: float,
-                 v_min: float | None,
-                 v_max: float | None,
+                 v_min: float = -100,
+                 v_max: float = 100,
                  str_format: str = '%.3f', 
                  label:str = "Default Slider",
                  flags:int = 0) -> tuple[bool, float]:
     """
     Wrapper for ps.imgui.SliderFloat
     """
-    if v_min is None:
-        v_min = -1000
-    if v_max is None:
-        v_max = 1000
 
     return imgui.SliderFloat(label, value, v_min, v_max, str_format, flags)
 
 def input_float(
-        label: str,
-        value: float,
+        label: str = "Default Input Float",
+        value: float = 0.0,
         step: float = 0.0,
         step_fast: float = 0.0,
         string_format: str = '%.3f',

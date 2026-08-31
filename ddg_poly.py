@@ -684,7 +684,7 @@ def callback() -> None:
 
     if imgui.button("Compute vertex's star"):
         name, mesh, ps_mesh = retrieve_mesh()
-        
+
         mesh.geometry_star(coordinates = app.user_interface_state.vertex_edge_face)
 
 ## Initialize Polyscope, has fallback
