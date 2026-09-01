@@ -19,10 +19,12 @@ from collections.abc import Callable
 from typing import Any, Literal, List
 import numpy as np
 import numpy.typing as npt
+
 import polyscope as ps
 
 import ddg_objects as ddg_obj
 from ddg_objects import Geometry, FloatArray
+import ddg_math as ddg_m
 import ps_wrappers as imgui
 import AuxFunctions as aux
 
@@ -32,7 +34,7 @@ import AuxFunctions as aux
 # return value.
 Operation = Callable[[Geometry, ps.SurfaceMesh], None]
 
-## Consts
+## Constants
 TIMED: bool = ddg_obj.TIMED
 MEMORY: bool = ddg_obj.MEMORY
 ERR: float = ddg_obj.ERR

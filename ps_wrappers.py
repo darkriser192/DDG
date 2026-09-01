@@ -30,6 +30,9 @@ def combo(a: str, b: int, c: Sequence[str]) -> tuple[bool, int]:
 def same_line() -> None:
     """
     wrapper for ps.imgui.SameLine()
+    
+    imgui.functionA | imgui.sameline | imgui.functionB
+
     """
     return imgui.SameLine()
 

@@ -14,6 +14,48 @@ small by intent; correctness matters more here than coverage.
 
 ---
 
+                         APP STATE
+                             │
+                    ┌────────┴────────┐
+                    │                 │
+              Imperative Shell        │
+                    │                 │
+        ┌───────────┼───────────┐     │
+        ▼           ▼           ▼     ▼
+    UI State    Object Registry   Initialization
+                                   Protocol
+                    │
+                    ▼
+             SEMANTIC OBJECTS
+                    │
+       ┌────────────┼────────────┐
+       ▼            ▼            ▼
+     Mesh        Support       Lattice
+       │            │            │
+       └────────────┼────────────┘
+                    │
+          Relationships / Contracts
+                    │
+          ┌─────────┴─────────┐
+          ▼                   ▼
+    DDG Objects          Representations
+ Functional / Math       Geometry / SDF / ...
+       Core                   │
+          │                   │
+          └─────────┬─────────┘
+                    ▼
+             Computational Core
+                    │
+                    ▼
+           ... Turtles all the
+              way down ...
+
+The dependency is intentionally one-way so that the DDG core can eventually
+serve applications beyond this Python/Polyscope implementation.
+
+
+---
+
 ## What it does
 
 | Operation | Produces |
