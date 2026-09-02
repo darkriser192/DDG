@@ -150,7 +150,7 @@ class UserInterfaceState():
     Because ``reference_vectors`` is user-editable, an operation must not index
     a hardcoded key into it -- a renamed or deleted entry would raise
     ``KeyError``. Operations should receive the selected vector as an argument;
-    :meth:`Geometry.compute_mesh_facet_direction` already takes ``(name,
+    :meth:`Geometry.compute_face_direction` already takes ``(name,
     reference)`` for this.
     """
     debug: bool = False
@@ -175,15 +175,15 @@ class UserInterfaceState():
     vertex_edge_face: tuple[int,int,int] = (0,0,0)
 
 @dataclass
-class Object():
+class SemanticObject():
     """
     Stub for semantic layer of interpretation
     """
     name: str # Natural language reference
     geometry: Geometry # Contains the actual Geometry object
     overhangs: List[npt.NDArray[np.int64]] # array of integer arrays for overhang faces
-    parents: dict[str, Object | None] # References to other object
-    children: dict[str, Object | None] # References to other object
+    parents: dict[str, SemanticObject | None] # References to other object
+    children: dict[str, SemanticObject | None] # References to other object
     generation: int = 0
 
 @dataclass
@@ -237,7 +237,7 @@ class AppState():
 
     meshes: dict[str, Geometry] = field(default_factory=dict)
     # TODO: for when we move meshes to new meshes
-    new_meshes: dict[int, Object | None] = field(default_factory=lambda: {1: None}) # TODO: placeholder
+    new_meshes: dict[int, SemanticObject | None] = field(default_factory=lambda: {1: None}) # TODO: placeholder
     operations: dict[str, Operation] = field(default_factory=dict)
     transforms: dict[str, Any] = field(default_factory=dict)
 
@@ -281,7 +281,7 @@ def operation(label: str) -> Callable[[Operation], Operation]:
     --------
     >>> @operation("Compute Areas")
     ... def _op_areas(mesh, ps_mesh):
-    ...     mesh.compute_mesh_facet_values()
+    ...     mesh.compute_face_values()
     """
     def deco(fn: Operation) -> Operation:
         app.operations[label] = fn
@@ -468,7 +468,7 @@ def _op_compute_triangle_data(mesh: Geometry, ps_mesh: ps.SurfaceMesh) -> None:
 
     Side Effects
     ------------
-    Populates the mesh facet values; adds "Facet Area" (faces) and "Height"
+    Populates the mesh face values; adds "Face Area" (faces) and "Height"
     (vertices) to the Polyscope structure.
 
     Notes
@@ -480,14 +480,14 @@ def _op_compute_triangle_data(mesh: Geometry, ps_mesh: ps.SurfaceMesh) -> None:
     if app.user_interface_state.debug:
         print(f"Computing Mesh Triangle Data on {app.user_interface_state.selected_mesh}")
 
-    mesh.compute_mesh_facet_values()
-    # We know for a fact that mesh.facet_areas will never be 'none' after calling a compute_*() method
-    assert mesh.facet_areas is not None
+    mesh.compute_face_values()
+    # We know for a fact that mesh.face_areas will never be 'none' after calling a compute_*() method
+    assert mesh.face_areas is not None
 
-    ps_mesh.add_scalar_quantity("Facet Area",
+    ps_mesh.add_scalar_quantity("Face Area",
                                 defined_on= 'faces',
-                                values= mesh.facet_areas,
-                                vminmax= (0.0, mesh.facet_areas.max()))
+                                values= mesh.face_areas,
+                                vminmax= (0.0, mesh.face_areas.max()))
     ps_mesh.add_scalar_quantity("Height",
                                 defined_on= 'vertices',
                                 values= mesh.trimesh_object.vertices[:, 2],
@@ -504,7 +504,7 @@ def _op_compute_dots(mesh: Geometry, ps_mesh: ps.SurfaceMesh) -> None:
 
     Side Effects
     ------------
-    Writes ``mesh.facet_dots["wrt Floor"]``; adds "DOT wrt Floor" and
+    Writes ``mesh.face_dots["wrt Floor"]``; adds "DOT wrt Floor" and
     "Angles wrt Floor" to the Polyscope structure, both defined on faces.
 
     Notes
@@ -518,9 +518,9 @@ def _op_compute_dots(mesh: Geometry, ps_mesh: ps.SurfaceMesh) -> None:
         print(f"Computing Facet Dot Data on {app.user_interface_state.selected_mesh}")
 
     reference_name = "wrt Floor"
-    mesh.compute_mesh_facet_direction(name = reference_name,reference = app.user_interface_state.reference_vectors["FLOOR"])
+    mesh.compute_face_direction(name = reference_name,reference = app.user_interface_state.reference_vectors["FLOOR"])
 
-    result = mesh.facet_dots[reference_name]
+    result = mesh.face_dots[reference_name]
     dots = result["dots"]
 
     ps_mesh.add_scalar_quantity(f"DOT {reference_name}",
@@ -540,12 +540,12 @@ def _op_compute_dots(mesh: Geometry, ps_mesh: ps.SurfaceMesh) -> None:
 def _op_compute_normals(mesh: Geometry, ps_mesh: ps.SurfaceMesh) -> None:
     """Display face normals as vectors and as RGB colours.
 
-    Computes the facet values first if they are unset, so the button works
+    Computes the face values first if they are unset, so the button works
     regardless of the order the user clicks things in.
 
     Side Effects
     ------------
-    May populate the mesh facet values; adds a "Normal direction" vector
+    May populate the mesh face values; adds a "Normal direction" vector
     quantity and a "normal directions" colour quantity, both on faces.
 
     Notes
@@ -557,17 +557,17 @@ def _op_compute_normals(mesh: Geometry, ps_mesh: ps.SurfaceMesh) -> None:
     if app.user_interface_state.debug:
         print(f"Showing normal directions on {app.user_interface_state.selected_mesh}")
 
-    if mesh.facet_normals is None:
-        mesh.compute_mesh_facet_values()
+    if mesh.face_normals is None:
+        mesh.compute_face_values()
     # Since we hace checked that is not None and if it is none we have computed them
-    assert mesh.facet_normals is not None
+    assert mesh.face_normals is not None
 
     ps_mesh.add_vector_quantity(name="Normal direction",
-                                values= mesh.facet_normals,
+                                values= mesh.face_normals,
                                 defined_on="faces")
     ps_mesh.add_color_quantity(name="normal directions",
                                defined_on="faces",
-                               values=(mesh.facet_normals + 1.0) / 2.0)
+                               values=(mesh.face_normals + 1.0) / 2.0)
 
 @operation("Compute Vertex Error")
 def _op_compute_curvature(mesh: Geometry, ps_mesh: ps.SurfaceMesh) -> None:
@@ -578,20 +578,20 @@ def _op_compute_curvature(mesh: Geometry, ps_mesh: ps.SurfaceMesh) -> None:
 
     Side Effects
     ------------
-    Populates ``mesh.vertex_defects`` and ``mesh.vertex_angles``; adds
+    Populates ``mesh.vertex_defects`` and ``mesh.corner_angles``; adds
     "Vertex Defect" to the Polyscope structure, defined on vertices.
 
     Raises
     ------
     AssertionError
-        Propagated from :meth:`Geometry.compute_mesh_vertex_defect` when the
+        Propagated from :meth:`Geometry.compute_vertex_defects` when the
         result disagrees with the ``trimesh`` reference. That oracle is
         deliberate -- a failure here means the curvature code is wrong, not
         that the mesh is unusual.
     """
     if app.user_interface_state.debug:
         print(f"Computing vertex error on {app.user_interface_state.selected_mesh} mesh")
-    mesh.compute_mesh_vertex_defect()
+    mesh.compute_vertex_defects()
     # Since we just cumputed them, we know they are not none
     assert mesh.vertex_defects is not None
     ps_mesh.add_scalar_quantity("Vertex Defect",
@@ -599,10 +599,10 @@ def _op_compute_curvature(mesh: Geometry, ps_mesh: ps.SurfaceMesh) -> None:
                                 values = mesh.vertex_defects,
                                 vminmax = (mesh.vertex_defects.min(),
                                            mesh.vertex_defects.max()))
-    assert mesh.gausian_curvature is not None
+    assert mesh.defect_ratio is not None
     ps_mesh.add_scalar_quantity("Gausian Curvature",
                                 defined_on = "vertices",
-                                values = mesh.gausian_curvature,
+                                values = mesh.defect_ratio,
                                 vminmax = (-1,1))
 
 ## Callback definition
@@ -703,7 +703,7 @@ def callback() -> None:
     if imgui.button("Compute vertex's star"):
         name, mesh, ps_mesh = retrieve_mesh()
 
-        mesh.geometry_star(coordinates = app.user_interface_state.vertex_edge_face)
+        mesh.geometry_star(element_ids = app.user_interface_state.vertex_edge_face)
 
 ## Initialize Polyscope, has fallback
 def polyscope_app_init(pre_load: str | None = None, default_app: AppState = app) -> AppState:

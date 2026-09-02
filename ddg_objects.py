@@ -1,5 +1,6 @@
-"""ddg_objects is the meant and potatoes of my ddg app containing objects
-for enforcing data flow and structure, and the mathematical operations as functions
+"""ddg_objects is the meat and potatoes of my ddg app containing objects
+that enforce data flow and structure. The mathematics itself lives in
+``ddg_math``; this module orchestrates it and holds the results.
 
 Promise of the math: A collection of DDG algorithms.
 
@@ -10,7 +11,7 @@ References
 https://www.cs.cmu.edu/~kmcrane/Projects/DDG/
 """
 # import sys
-import pathlib as path
+import pathlib
 # from collections.abc import Sequence
 from typing import Literal, TypedDict
 
@@ -30,8 +31,8 @@ FloatArray = npt.NDArray[np.float64]
 IntArray = npt.NDArray[np.int64]
 SparseMatrix = sp.sparse.csr_matrix
 
-class FacetDots(TypedDict):
-    """One entry of ``Geometry.facet_dots``: the comparison against one reference.
+class FaceDots(TypedDict):
+    """One entry of ``Geometry.face_dots``: the comparison against one reference.
 
     A ``TypedDict`` rather than a plain ``dict`` so that ``result["dots"]`` reads
     back as an array while ``result["angles"]`` keeps its ``None`` case, instead
@@ -52,7 +53,7 @@ class Surface():
     TODO: In preparation of needing a surface class that does not need to be 
     a none manifold object in 3D
     """
-    def __init__(self, name: str = "Default Surafce Name") -> None:
+    def __init__(self, name: str = "Default Surface Name") -> None:
         self.name = name
 
 class Geometry():
@@ -83,23 +84,29 @@ class Geometry():
         Vertex count (V).
     number_faces : int
         Face count (F).
-    facet_normals : numpy.ndarray or None, shape (F, 3)
+    face_normals : numpy.ndarray or None, shape (F, 3)
         Unit normal per face.
-    normal_magnitude : numpy.ndarray or None, shape (F,)
+    normal_magnitudes : numpy.ndarray or None, shape (F,)
         Magnitude of each raw face cross product, i.e. twice the face area.
-    facet_areas : numpy.ndarray or None, shape (F,)
+    face_areas : numpy.ndarray or None, shape (F,)
         Area per face.
     face_centers : numpy.ndarray or None, shape (F, 3)
         Centroid per face. No method currently sets this.
-    edges : numpy.ndarray or None, shape (F, 3, 3)
-        The three edge vectors per face, stacked edge-index first.
-    facet_dots : dict
+    edge_magnitudes : numpy.ndarray or None, shape (F, 3)
+        Length of each of the three edges per face.
+    edge_directions : numpy.ndarray or None, shape (F, 3, 3)
+        Unit edge vectors per face, stacked edge-index first, in winding order.
+    face_dots : dict
         Reference name -> ``{"dots": (F,), "angles": (F,) or None}``. Holds one
         entry per reference direction compared against.
     vertex_defects : numpy.ndarray or None, shape (V,)
         Angle defect per vertex: ``2*pi`` minus the incident corner angles.
-    vertex_angles : numpy.ndarray or None, shape (F, 3)
-        Corner angle at each face corner, in radians.
+    corner_angles : numpy.ndarray or None, shape (F, 3)
+        Corner angle at each face corner, in radians. Indexed by face and
+        corner, not by vertex.
+    defect_ratio : numpy.ndarray or None, shape (V,)
+        ``vertex_defects / (2*pi)`` -- the angle defect as a fraction of a full
+        turn, so 0 means locally flat.
     face_face_adjacency : scipy.sparse.csr_matrix or None, shape (F, F)
         Symmetric; 1 where two faces share an edge.
     vertex_vertex_adjacency : scipy.sparse.csr_matrix or None, shape (V, V)
@@ -125,14 +132,16 @@ class Geometry():
     trimesh_object: trimesh.Trimesh
     number_vertices: int
     number_faces: int
-    facet_normals: FloatArray | None
-    normal_magnitude: FloatArray | None
-    facet_areas: FloatArray | None
+    face_normals: FloatArray | None
+    normal_magnitudes: FloatArray | None
+    face_areas: FloatArray | None
     face_centers: FloatArray | None
-    edges: FloatArray | None
-    facet_dots: dict[str, FacetDots]
+    edge_magnitudes: FloatArray | None
+    edge_directions: FloatArray | None
+    face_dots: dict[str, FaceDots]
     vertex_defects: FloatArray | None
-    vertex_angles: FloatArray | None
+    corner_angles: FloatArray | None
+    defect_ratio: FloatArray | None
     face_face_adjacency: SparseMatrix | None
     vertex_vertex_adjacency: SparseMatrix | None
     vertex_face_adjacency: IntArray | None
@@ -149,7 +158,7 @@ class Geometry():
             self.trimesh_object = trimesh.Trimesh(vertices=vertices,faces=faces)
         else:
             # Extract the name of the object
-            self.name = path.Path(file_path).stem
+            self.name = pathlib.Path(file_path).stem
             self.path = file_path
             print(self.name)
             # Try to load the schene into the object
@@ -163,18 +172,19 @@ class Geometry():
         self.number_faces = len(self.trimesh_object.faces)
 
         # Property pre-allocation/creation for reference later
-        self.facet_normals = None
-        self.normal_magnitude = None
-        self.facet_areas = None
+        self.face_normals = None
+        self.normal_magnitudes = None
+        self.face_areas = None
         self.face_centers = None
-        self.edges = None
-        self.facet_dots = {}
+        self.edge_magnitudes = None
+        self.edge_directions = None
+        self.face_dots = {}
         self.vertex_defects = None
-        self.vertex_angles = None
+        self.corner_angles = None
         self.face_face_adjacency = None
         self.vertex_vertex_adjacency = None
         self.vertex_face_adjacency = None
-        self.gausian_curvature = None
+        self.defect_ratio = None
 
     @aux.timed(TIMED)
     @aux.memory(MEMORY)
@@ -219,28 +229,29 @@ class Geometry():
     # To be used by a callback or other call operation instead of doing at __init__
     @aux.timed(TIMED)
     @aux.memory(MEMORY)
-    def compute_mesh_facet_values(self) -> None:
+    def compute_face_values(self) -> None:
         """Compute and store the per-face geometric quantities.
 
         Thin wrapper over :func:`compute_triangle_data`.
 
         Side Effects
         ------------
-        Sets ``self.facet_normals``, ``self.normal_magnitude``,
-        ``self.facet_areas``, and ``self.edges``.
+        Sets ``self.face_normals``, ``self.normal_magnitudes``,
+        ``self.face_areas``, ``self.edge_magnitudes``, and
+        ``self.edge_directions``.
         """
-        self.facet_normals, self.normal_magnitude, self.facet_areas, self.edges = ddg_m.compute_triangle_data(self.trimesh_object.vertices[self.trimesh_object.faces])
+        self.face_normals, self.normal_magnitudes, self.face_areas, self.edge_magnitudes, self.edge_directions = ddg_m.compute_triangle_data(self.trimesh_object.vertices[self.trimesh_object.faces])
 
     @aux.timed(TIMED)
     @aux.memory(MEMORY)
-    def compute_mesh_facet_direction(self,
+    def compute_face_direction(self,
                                      name: str,
                                      reference: FloatArray = np.array([0.0,0.0,1.0]),
                                      angle: bool = True) -> None:
         """Compare face normals against one named reference direction.
 
-        Thin wrapper over :func:`check_normal_direction`. Computes
-        ``self.facet_normals`` first if it is unset, so call order does not
+        Thin wrapper over :func:`compute_normal_direction`. Computes
+        ``self.face_normals`` first if it is unset, so call order does not
         matter for this method.
 
         Parameters
@@ -256,23 +267,23 @@ class Geometry():
 
         Side Effects
         ------------
-        Sets ``self.facet_dots[name]`` to a dict with keys ``"dots"``
+        Sets ``self.face_dots[name]`` to a dict with keys ``"dots"``
         (shape (F,)) and ``"angles"`` (shape (F,), or None when ``Angle`` is
         False).
         """
-        if self.facet_normals is None:
-            self.compute_mesh_facet_values()
+        if self.face_normals is None:
+            self.compute_face_values()
         # The call above sets it; the assert is what lets the checker see that.
-        assert self.facet_normals is not None
+        assert self.face_normals is not None
 
-        dots, angles = ddg_m.check_normal_direction(self.facet_normals , reference, angle = angle)
+        dots, angles = ddg_m.compute_normal_direction(self.face_normals , reference, angle = angle)
 
-        values: FacetDots = {"dots":dots, "angles":angles}
-        self.facet_dots[name] = values
+        values: FaceDots = {"dots":dots, "angles":angles}
+        self.face_dots[name] = values
 
     @aux.timed(TIMED)
     @aux.memory(MEMORY)
-    def compute_mesh_vertex_defect(self) -> None:
+    def compute_vertex_defects(self) -> None:
         """Compute and store the per-vertex angle defect.
 
         The discrete Gaussian curvature at a vertex: ``2*pi`` minus the sum of
@@ -280,10 +291,11 @@ class Geometry():
 
         Side Effects
         ------------
-        Sets ``self.vertex_defects`` and ``self.vertex_angles``.
+        Sets ``self.vertex_defects``, ``self.corner_angles``, and
+        ``self.defect_ratio``.
 
-        Computes ``self.edges`` first if it is unset, so call order does not
-        matter.
+        Computes ``self.edge_directions`` first if it is unset, so call order
+        does not matter.
 
         Raises
         ------
@@ -298,13 +310,13 @@ class Geometry():
         on ``rabbit-low-poly.stl`` is about 5e-14, so the tolerance has ample
         margin.
         """
-        if self.edges is None:
-            self.compute_mesh_facet_values()
+        if self.edge_directions is None:
+            self.compute_face_values()
         # The call above sets it; the assert is what lets the checker see that.
-        assert self.edges is not None
+        assert self.edge_directions is not None
 
-        self.vertex_defects, self.vertex_angles, self.gausian_curvature = ddg_m.compute_gausian_curvature(
-            self.edges,
+        self.vertex_defects, self.corner_angles, self.defect_ratio = ddg_m.compute_gaussian_curvature(
+            self.edge_directions,
             self.trimesh_object.faces,
             self.number_vertices)
         
@@ -314,7 +326,7 @@ class Geometry():
 
     @aux.timed(TIMED)
     @aux.memory(MEMORY)
-    def mem_report(self) -> dict[str, float | None]:
+    def memory_report(self) -> dict[str, float | None]:
         """
         Return the memory use of each stored attribute, in MB.
 
@@ -340,7 +352,7 @@ class Geometry():
     @aux.timed(TIMED)
     @aux.memory(MEMORY)
     def geometry_star(self,
-                      coordinates: tuple[int,int,int],
+                      element_ids: tuple[int,int,int],
                       mode: Literal["vertex", "edge", "face", "all"] = "all") -> None:
         """
         returns the Star surface combinatorial operator
@@ -349,25 +361,25 @@ class Geometry():
         match mode:
             case "vertex":
                 print(f"\nClicked with {mode}:"
-                      f"\n- vertex id: {coordinates[0]}")
+                      f"\n- vertex id: {element_ids[0]}")
             case "edge":
                 print(f"\nClicked with {mode}:"
-                      f"\n- edge id: {coordinates[1]}")
+                      f"\n- edge id: {element_ids[1]}")
             case "face":
                 print(f"\nClicked with {mode}:"
-                      f"\n- face id: {coordinates[2]}")
+                      f"\n- face id: {element_ids[2]}")
             case "all":
                 print(f"\nClicked with {mode}:"
-                      f"\n- vertex id: {coordinates[0]}"
-                      f"\n- edge id: {coordinates[1]}"
-                      f"\n- face id: {coordinates[2]}")
+                      f"\n- vertex id: {element_ids[0]}"
+                      f"\n- edge id: {element_ids[1]}"
+                      f"\n- face id: {element_ids[2]}")
 
     @aux.timed(False)
     @aux.memory(False)
     def __repr__(self) -> str:
         return (f"Geometry({self.name!r}\n - V = {self.number_vertices}\n - F = {self.number_faces})")
 
-class SDFObject():
+class SignedDistanceField():
     """
     Data structure representing a functional Signed Distance Field, or 
     more generally a [signed] metric field
@@ -391,13 +403,13 @@ class SDFObject():
 ## Generates an SDF from a mesh
 @aux.timed(TIMED)
 @aux.memory(MEMORY)
-def sdf_from_mesh(mesh_object: Geometry) -> SDFObject:
+def sdf_from_mesh(mesh_object: Geometry) -> SignedDistanceField:
     """
     Backbone to generate an sdf from a mesh.
     # TODO: No idea how thils will work but it will probably exist.
     # Not married to the idea
     """
-    return SDFObject(name = "Default Name", source = mesh_object.name)
+    return SignedDistanceField(name = "Default Name", source = mesh_object.name)
 
 # Main entry point
 if __name__ == "__main__":
