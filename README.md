@@ -14,6 +14,7 @@ small by intent; correctness matters more here than coverage.
 
 ---
 
+
                          APP STATE
                              │
                     ┌────────┴────────┐
@@ -50,9 +51,11 @@ small by intent; correctness matters more here than coverage.
            ... Turtles all the
               way down ...
 
+
+---
+
 The dependency is intentionally one-way so that the DDG core can eventually
 serve applications beyond this Python/Polyscope implementation.
-
 
 ---
 
