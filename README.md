@@ -9,51 +9,7 @@ used as a working platform for discrete differential geometry.
 Load a triangle mesh, compute per-face and per-vertex quantities, and inspect them
 as scalar, vector, and colour fields in a 3D viewer.
 
-**Version 0.0.2** — early development. The API is unstable and the feature set is
-small by intent; correctness matters more here than coverage.
-
----
-
-                         APP STATE
-                             │
-                    ┌────────┴────────┐
-                    │                 │
-              Imperative Shell        │
-                    │                 │
-        ┌───────────┼───────────┐     │
-        ▼           ▼           ▼     ▼
-    UI State    Object Registry   Initialization
-                                   Protocol
-                    │
-                    ▼
-             SEMANTIC OBJECTS
-                    │
-       ┌────────────┼────────────┐
-       ▼            ▼            ▼
-     Mesh        Support       Lattice
-       │            │            │
-       └────────────┼────────────┘
-                    │
-          Relationships / Contracts
-                    │
-          ┌─────────┴─────────┐
-          ▼                   ▼
-    DDG Objects          Representations
- Functional / Math       Geometry / SDF / etc
-       Core                   │
-          │                   │
-          └─────────┬─────────┘
-                    ▼
-             Computational Core
-                    │
-                    ▼
-           ... Turtles all the
-              way down ...
-
----
-
-The dependency is intentionally one-way so that the DDG core can eventually
-serve applications beyond this Python/Polyscope implementation.
+**Version 0.0.2** — early development. The API is unstable and the feature set is small by intent; correctness matters more here than coverage.
 
 ---
 
