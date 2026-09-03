@@ -14,7 +14,6 @@ small by intent; correctness matters more here than coverage.
 
 ---
 
-
                          APP STATE
                              │
                     ┌────────┴────────┐
@@ -40,7 +39,7 @@ small by intent; correctness matters more here than coverage.
           ┌─────────┴─────────┐
           ▼                   ▼
     DDG Objects          Representations
- Functional / Math       Geometry / SDF / ...
+ Functional / Math       Geometry / SDF / etc
        Core                   │
           │                   │
           └─────────┬─────────┘
@@ -50,7 +49,6 @@ small by intent; correctness matters more here than coverage.
                     ▼
            ... Turtles all the
               way down ...
-
 
 ---
 
