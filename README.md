@@ -56,18 +56,22 @@ pip install numpy scipy trimesh polyscope
 python ddg_main.py
 ```
 
-Run it from the repository root. `core` is a namespace package resolved against
-the launch directory, so starting from elsewhere will not find it.
+Run it from the repository root. `core` and `interfaces` are namespace packages
+resolved against the launch directory, so starting from elsewhere will not find
+them.
 
 `ddg_main.py` pre-loads `meshes/rabbit-low-poly.stl` through the `DEFAULT_MESH`
 constant. Set it to `None` to start with an empty viewer and load a mesh through
 the GUI instead.
 
-`ddg_poly.py` is also runnable on its own for prototyping the app layer without
-the pre-load step:
+Several modules carry their own `__main__` block for prototyping. Start them
+with `-m`, from the repository root — running the file by path puts its own
+folder on `sys.path` instead of the root, and the `core` imports then fail:
 
 ```bash
-python ddg_poly.py
+python -m interfaces.polyscope_app.ddg_poly   # the app layer, without the pre-load
+python -m core.ddg_objects                # builds a tetrahedron and the sample mesh
+python -m core.ddg_math
 ```
 
 ## Tests
@@ -119,21 +123,25 @@ The controls appear in the panel on the right.
 ## How the code is organised
 
 ```
-ddg_main.py           entry point; clears the terminal, starts the app
-ddg_poly.py           Polyscope layer: AppState, the @operation registry, the callback
-ps_wrappers.py        thin wrappers over polyscope.imgui, with docstrings
-AuxFunctions.py       timing and memory decorators, file dialog, helpers
+ddg_main.py             entry point; clears the terminal, starts the app
 core/
-  ddg_objects.py      the Geometry container: holds a mesh and its derived quantities
-  ddg_math.py         the mathematics: vectorized, pure, no mesh object required
-  ddg_types.py        shared array type aliases
-tests/                headless pytest suite, one module per source layer
-meshes/               sample geometry
+  ddg_objects.py        the Geometry container: holds a mesh and its derived quantities
+  ddg_math.py           the mathematics: vectorized, pure, no mesh object required
+  ddg_types.py          shared array type aliases
+  AuxFunctions.py       timing and memory decorators, file dialog, helpers
+interfaces/
+  polyscope_app/        named so it cannot shadow the installed `polyscope` package
+    ddg_poly.py         AppState, the @operation registry, the per-frame callback
+    ps_wrappers.py      thin wrappers over polyscope.imgui, with docstrings
+tests/                  headless pytest suite, one module per source layer
+meshes/                 sample geometry
 ```
 
-**Nothing under `core/` imports `ddg_poly.py`.** The dependency runs one way
-only, so the mathematics can be exercised without a GUI. This is the main
-structural decision in the project and the thing most worth preserving.
+**Nothing under `core/` imports anything under `interfaces/`.** The dependency
+runs one way only, so the mathematics can be exercised without a GUI. This is
+the main structural decision in the project and the thing most worth preserving.
+`interfaces/` exists so a second front end — a CLI, a notebook helper, another
+viewer — is a sibling of `polyscope_app/` rather than a rewrite.
 
 Inside `core/`, the same split runs once more: `ddg_math.py` holds free
 functions over plain arrays, and `ddg_objects.py` calls them and stores the

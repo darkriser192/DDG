@@ -25,8 +25,8 @@ import polyscope as ps
 import core.ddg_objects as ddg_obj
 from core.ddg_objects import Geometry, FloatArray
 # import core.ddg_math as ddgmath
-import ps_wrappers as imgui
-import AuxFunctions as aux
+import interfaces.polyscope_app.ps_wrappers as imgui
+import core.AuxFunctions as aux
 
 ## Type Aliases
 # What the @operation registry stores: every button handler takes the working

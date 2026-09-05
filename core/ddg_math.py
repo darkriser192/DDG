@@ -11,7 +11,7 @@ import numpy as np
 
 ## Custom Imports
 from core.ddg_types import FloatArray, IntArray
-import AuxFunctions as aux
+import core.AuxFunctions as aux
 
 # Module Constants
 ### Global Constants

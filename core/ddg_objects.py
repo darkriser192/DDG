@@ -23,7 +23,7 @@ import trimesh
 ### Custom Imports
 import core.ddg_math as ddgmath
 from core.ddg_types import FloatArray, IntArray, SparseMatrix
-import AuxFunctions as aux
+import core.AuxFunctions as aux
 
 class FaceDots(TypedDict):
     """One entry of ``Geometry.face_dots``: the comparison against one reference.

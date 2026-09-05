@@ -13,7 +13,7 @@ import dataclasses
 import numpy as np
 import pytest
 
-import ddg_poly as ddgpoly
+import interfaces.polyscope_app.ddg_poly as ddgpoly
 from core.ddg_objects import Geometry
 
 ### Fixtures
