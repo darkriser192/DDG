@@ -60,7 +60,7 @@ from pprint import pprint
 
 ### Custom Imports
 # import ddg_objects as ddg_o
-import ddg_poly as ddg_p
+import ddg_poly as ddgpoly
 import AuxFunctions as aux
 
 ### Consts
@@ -69,7 +69,7 @@ CLEAR: bool = True
 ### Main Function
 @aux.timed(False)
 @aux.memory(True)
-def main(pre_load: str | None = None) -> ddg_p.AppState:
+def main(pre_load: str | None = None) -> ddgpoly.AppState:
     """
     Main function separated for time socping and others
     """
@@ -80,7 +80,7 @@ def main(pre_load: str | None = None) -> ddg_p.AppState:
         for dist in metadata.distributions():
             print(f"{dist.metadata['Name']} == {dist.version}")
 
-    app_state = ddg_p.polyscope_app_init(pre_load = pre_load)
+    app_state = ddgpoly.polyscope_app_init(pre_load = pre_load)
 
     return app_state
 

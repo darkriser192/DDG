@@ -16,20 +16,14 @@ import pathlib
 from typing import Literal, TypedDict
 
 import numpy as np
-import numpy.typing as npt
+
 import scipy as sp
 import trimesh
 
 ### Custom Imports
-import ddg_math as ddg_m
+import core.ddg_math as ddgmath
+from core.ddg_types import FloatArray, IntArray, SparseMatrix
 import AuxFunctions as aux
-
-### Type Aliases
-# Arrays carry a dtype but no shape: numpy shape typing is still provisional and
-# most operations erase it. Shapes stay documented in the docstrings.
-FloatArray = npt.NDArray[np.float64]
-IntArray = npt.NDArray[np.int64]
-SparseMatrix = sp.sparse.csr_matrix
 
 class FaceDots(TypedDict):
     """One entry of ``Geometry.face_dots``: the comparison against one reference.
@@ -240,7 +234,7 @@ class Geometry():
         ``self.face_areas``, ``self.edge_magnitudes``, and
         ``self.edge_directions``.
         """
-        self.face_normals, self.normal_magnitudes, self.face_areas, self.edge_magnitudes, self.edge_directions = ddg_m.compute_triangle_data(self.trimesh_object.vertices[self.trimesh_object.faces])
+        self.face_normals, self.normal_magnitudes, self.face_areas, self.edge_magnitudes, self.edge_directions = ddgmath.compute_triangle_data(self.trimesh_object.vertices[self.trimesh_object.faces])
 
     @aux.timed(TIMED)
     @aux.memory(MEMORY)
@@ -276,7 +270,7 @@ class Geometry():
         # The call above sets it; the assert is what lets the checker see that.
         assert self.face_normals is not None
 
-        dots, angles = ddg_m.compute_normal_direction(self.face_normals , reference, angle = angle)
+        dots, angles = ddgmath.compute_normal_direction(self.face_normals , reference, angle = angle)
 
         values: FaceDots = {"dots":dots, "angles":angles}
         self.face_dots[name] = values
@@ -315,7 +309,7 @@ class Geometry():
         # The call above sets it; the assert is what lets the checker see that.
         assert self.edge_directions is not None
 
-        self.vertex_defects, self.corner_angles, self.defect_ratio = ddg_m.compute_gaussian_curvature(
+        self.vertex_defects, self.corner_angles, self.defect_ratio = ddgmath.compute_gaussian_curvature(
             self.edge_directions,
             self.trimesh_object.faces,
             self.number_vertices)

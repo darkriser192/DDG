@@ -22,9 +22,9 @@ import numpy.typing as npt
 
 import polyscope as ps
 
-import ddg_objects as ddg_obj
-from ddg_objects import Geometry, FloatArray
-import ddg_math as ddg_m
+import core.ddg_objects as ddg_obj
+from core.ddg_objects import Geometry, FloatArray
+# import core.ddg_math as ddgmath
 import ps_wrappers as imgui
 import AuxFunctions as aux
 
@@ -236,8 +236,10 @@ class AppState():
     user_interface_state: UserInterfaceState = field(default_factory=UserInterfaceState)
 
     meshes: dict[str, Geometry] = field(default_factory=dict)
+
     # TODO: for when we move meshes to new meshes
     new_meshes: dict[int, SemanticObject | None] = field(default_factory=lambda: {1: None}) # TODO: placeholder
+
     operations: dict[str, Operation] = field(default_factory=dict)
     transforms: dict[str, Any] = field(default_factory=dict)
 

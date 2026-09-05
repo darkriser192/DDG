@@ -7,11 +7,10 @@ utilizes numpy and scipy as the backbone of the system
 # Imports
 ## Standard library imports
 from collections.abc import Sequence
-
 import numpy as np
-import numpy.typing as npt
 
 ## Custom Imports
+from core.ddg_types import FloatArray, IntArray
 import AuxFunctions as aux
 
 # Module Constants
@@ -20,10 +19,6 @@ DEBUG: bool = False # Debug flag to print some items as I code
 TIMED: bool = False # Debug flag to print time estimates of functions
 MEMORY: bool = False # Debug flag for memory probing
 ERR: float = 1e-8 # Defines a global error value for some computations
-
-### Type Aliases
-FloatArray = npt.NDArray[np.float64]
-IntArray = npt.NDArray[np.int64]
 
 # Support Functions
 @aux.timed(TIMED)
