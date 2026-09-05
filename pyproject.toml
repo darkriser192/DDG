@@ -1,3 +1,29 @@
+[project]
+name = "ddg-toolkit"
+version = "0.0.2"
+requires-python = "==3.14"
+dependencies = [
+    "numpy >= 2.5.2",
+    "numpy-stl >= 4.0.0",
+    "trimesh >= 5.0.0",
+    "scipy >= 1.18.0",
+    "networkx >= 3.6.1",
+    "polyscope >= 2.6.1",
+    "psutil >= 7.2.2",
+    "matplotlib >= 3.11.1",
+    "plotly >= 6.9.0",
+    "cupy >= 14.1.1",
+    "cascadio >= 0.1.1",
+    "eigen >= 0.1.1",
+    "tk >= 0.1.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest==9.1.1",
+    "git-filter-repo==2.47.0",
+]
+
 [tool.pylint.typecheck]
 # extension-pkg-allow-list = ["polyscope", "polyscope.imgui"]
 
@@ -7,5 +33,5 @@ max-line-length = 200   # or bump to taste
 [tool.pylint."messages control"]
 disable = [
     "broad-exception-caught",  # the ps.init() fallback is an intentional catch-all
-    # "no-member",   # Pylance owns member checking; Pylint can't introspect compiled polyscope
+    #"no-member",   # Pylance owns member checking; Pylint can't introspect compiled polyscope
 ]

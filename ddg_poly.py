@@ -536,7 +536,7 @@ def _op_compute_dots(mesh: Geometry, ps_mesh: ps.SurfaceMesh) -> None:
                                     vminmax = (angles_in_degs.min(),
                                                angles_in_degs.max()))
 
-@operation("Compute normal directions")
+@operation("Compute Normal directions")
 def _op_compute_normals(mesh: Geometry, ps_mesh: ps.SurfaceMesh) -> None:
     """Display face normals as vectors and as RGB colours.
 
@@ -565,7 +565,7 @@ def _op_compute_normals(mesh: Geometry, ps_mesh: ps.SurfaceMesh) -> None:
     ps_mesh.add_vector_quantity(name="Normal direction",
                                 values= mesh.face_normals,
                                 defined_on="faces")
-    ps_mesh.add_color_quantity(name="normal directions",
+    ps_mesh.add_color_quantity(name="Normal directions",
                                defined_on="faces",
                                values=(mesh.face_normals + 1.0) / 2.0)
 

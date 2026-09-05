@@ -30,12 +30,12 @@ while ddg_objects remains independent of the application layer.
        │            │            │
        └────────────┼────────────┘
                     │
-          Relationships / Contracts
+         Relationships / Contracts
                     │
           ┌─────────┴─────────┐
           ▼                   ▼
     DDG Objects          Representations
- Functional / Math       Geometry / SDF / ...
+ Functional / Math       Geometry / SDF /...
        Core                   │
           │                   │
           └─────────┬─────────┘
@@ -43,7 +43,7 @@ while ddg_objects remains independent of the application layer.
              Computational Core
                     │
                     ▼
-           ... Turtles all the
+           ...Turtles all the
               way down ...
 
 The dependency is intentionally one-way so that the DDG core can eventually
@@ -64,7 +64,7 @@ import ddg_poly as ddg_p
 import AuxFunctions as aux
 
 ### Consts
-CLEAR: bool = False
+CLEAR: bool = True
 
 ### Main Function
 @aux.timed(False)
@@ -78,7 +78,7 @@ def main(pre_load: str | None = None) -> ddg_p.AppState:
         aux.clear_terminal()
         print(aux.python_version())
         for dist in metadata.distributions():
-            print(f"{dist.metadata['Name']}=={dist.version}")
+            print(f"{dist.metadata['Name']} == {dist.version}")
 
     app_state = ddg_p.polyscope_app_init(pre_load = pre_load)
 

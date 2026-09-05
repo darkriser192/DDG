@@ -489,7 +489,7 @@ def compute_triangle_jacobian(triangle_coordinates: FloatArray):
 
 # Main entry point
 if __name__ == "__main__":
-    import unittest as test
+    import pytest
     print("Main Entry Point")
 
     print("Main Exit point")
