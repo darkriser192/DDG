@@ -7,7 +7,7 @@ ref: https://polyscope.run/py/basics/interactive_UIs_and_animation/#sample-custo
 from collections.abc import Sequence
 
 from polyscope import imgui
-from polyscope import implot
+#from polyscope import implot
 
 def button(label: str, button_size: tuple[float, float] = (0.0, 0.0),) -> bool:
     """"Wwrapper for ps.imgui.Button()

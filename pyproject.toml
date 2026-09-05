@@ -1,7 +1,7 @@
 [project]
 name = "ddg-toolkit"
 version = "0.0.2"
-requires-python = " == 3.14"
+requires-python = "== 3.14.*"
 dependencies = [
     "numpy >= 2.5.2",
     "numpy-stl >= 4.0.0",
@@ -23,6 +23,14 @@ dev = [
     "pytest==9.1.1",
     "git-filter-repo==2.47.0",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# `core` is a namespace package with no __init__.py, so it resolves against the
+# launch directory. Without this, `pytest` only puts tests/ on sys.path and
+# `import core.ddg_math` fails; `python -m pytest` happens to work because it
+# adds the cwd. This makes both invocations behave the same.
+pythonpath = ["."]
 
 [tool.pylint.typecheck]
 # extension-pkg-allow-list = ["polyscope", "polyscope.imgui"]

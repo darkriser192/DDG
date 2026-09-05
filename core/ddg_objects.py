@@ -57,14 +57,16 @@ class Geometry():
     Wraps a ``trimesh`` mesh and exposes the quantities used across the
     project. Construction is cheap: only the name, path, and element counts
     are set. Every geometric quantity is computed on request by a
-    ``compute_*`` method. Replaces :class:`MeshObject`.
+    ``compute_*`` method.
 
     Parameters
     ----------
-    file_path : str
+    file_path : str or None
         Path to a mesh file loadable by ``trimesh.load_mesh`` (e.g. an STL).
         Loaded with ``force='mesh'`` so multi-body files collapse to a single
-        mesh rather than a ``Scene``.
+        mesh rather than a ``Scene``. None builds the unit tetrahedron
+        instead, named ``"Test Tetrahedron"``, which is the fixture the tests
+        are written against.
 
     Attributes
     ----------

@@ -212,25 +212,31 @@ def _get_tk_root() -> tk.Tk:
 def read_file() -> str | None:
     """Open a file-picker dialog and return the chosen path.
 
-    Spins up a hidden Tk root window, shows a native "open file" dialog via
-    ``tkinter.filedialog.askopenfilename``, then tears the root down. If the
-    user cancels (no selection), the program is terminated.
+    Shows a native "open file" dialog via
+    ``tkinter.filedialog.askopenfilename``, parented to the process-wide
+    hidden root from :func:`_get_tk_root`. A cancelled dialog is a normal
+    outcome, not an error.
 
     Returns
     -------
-    str
-        Absolute path to the file the user selected.
+    filepath : str or None
+        Absolute path to the file the user selected, or None if the dialog
+        was cancelled.
 
-    Raises
-    ------
-    SystemExit
-        If the dialog is cancelled or no file is selected.
+    Side Effects
+    ------------
+    Creates the hidden Tk root on first call and leaves it alive for the rest
+    of the process. Prints a line to stdout when nothing is selected.
 
     Notes
     -----
-    ``askopenfilename`` returns an empty string on cancel; the falsy check
-    converts that into a ``SystemExit`` so callers always receive a valid,
-    non-empty path (or the program exits).
+    ``askopenfilename`` returns an empty string on cancel; the ``or None``
+    converts that into None, so a caller tests one sentinel rather than two.
+
+    The root is deliberately never destroyed. Creating and destroying a
+    ``tk.Tk()`` per call inside a GL render loop crashes on repeat, so the
+    lazy singleton is what makes the dialog safe to open from the Polyscope
+    callback. It also stops the roots accumulating in a long-lived kernel.
     """
     root = _get_tk_root()
     root.update()

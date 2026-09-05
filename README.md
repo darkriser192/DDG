@@ -19,7 +19,7 @@ as scalar, vector, and colour fields in a 3D viewer.
 |---|---|
 | Compute Mesh Triangle Data | Per-face area, and vertex height along the up axis |
 | Compute Mesh Dots vs FLOOR | Dot product and angle of each face normal against a reference direction |
-| Compute normal directions | Face normals as vectors and as an RGB colour field |
+| Compute Normal directions | Face normals as vectors and as an RGB colour field |
 | Compute Vertex Error | Per-vertex angle defect — the discrete Gaussian curvature |
 
 The angle defect is computed from scratch and checked against `trimesh`'s own
@@ -30,10 +30,11 @@ what makes the hand-written geometry safe to refactor.
 
 ## Requirements
 
-- **Python 3.13+** (developed on 3.14)
+- **Python 3.14** (`pyproject.toml` pins `== 3.14.*`)
 - `numpy`, `scipy`, `trimesh`, `polyscope`
 - `tkinter` for the file-open dialog — bundled with Python on Windows and macOS;
-  on Debian/Ubuntu install `python3-tk`
+  on Debian/Ubuntu install `python3-tk`. It is part of the standard library, so
+  there is nothing to install from PyPI
 - A GPU with OpenGL support (Polyscope renders through it)
 
 ## Install
@@ -55,10 +56,12 @@ pip install numpy scipy trimesh polyscope
 python ddg_main.py
 ```
 
-> **Note:** `ddg_main.py` currently pre-loads a mesh from a hardcoded absolute
-> path (`DEFAULT_MESH`). Edit that line to point at `rabbit-low-poly.stl` in this
-> repository, or set it to `None` to start with an empty viewer and load a mesh
-> through the GUI.
+Run it from the repository root. `core` is a namespace package resolved against
+the launch directory, so starting from elsewhere will not find it.
+
+`ddg_main.py` pre-loads `meshes/rabbit-low-poly.stl` through the `DEFAULT_MESH`
+constant. Set it to `None` to start with an empty viewer and load a mesh through
+the GUI instead.
 
 `ddg_poly.py` is also runnable on its own for prototyping the app layer without
 the pre-load step:
@@ -66,6 +69,23 @@ the pre-load step:
 ```bash
 python ddg_poly.py
 ```
+
+## Tests
+
+```bash
+pip install pytest
+pytest
+```
+
+The suite is headless — it never opens a viewer — and covers the math layer
+against literal arrays, the `Geometry` container against the built-in
+tetrahedron and the sample mesh, and the app layer through a recording stub that
+stands in for a Polyscope surface mesh. Tests that need `meshes/rabbit-low-poly.stl`
+skip when it is absent.
+
+`Geometry(None)` builds a unit tetrahedron with no file I/O. It is the fixture
+most of the suite is written against, and the quickest way to exercise the
+mathematics from a REPL.
 
 ---
 
@@ -82,26 +102,43 @@ The controls appear in the panel on the right.
    pressing one twice is harmless.
 4. Displayed quantities appear in Polyscope's own structure panel, where you can
    switch between them, change colour maps, and adjust ranges.
-5. **New Mesh Name** + **Save Mesh** exports the selected mesh to STL.
+5. **New Mesh Name** + **Save Mesh** exports the selected mesh to STL, relative to
+   the working directory. An existing file is overwritten without warning.
 6. **Unload** removes the selected mesh from both the viewer and memory.
 7. **Debug Mode** toggles diagnostic output, including a per-attribute memory
    breakdown printed when a mesh loads.
+8. **UI Scale** resizes the control panel. Clamped to 0.5–2.0.
+9. **Vert, Edge, Face** takes three element IDs for **Compute vertex's star**.
+   Both are scaffolding: the button prints the IDs it was given and computes
+   nothing yet.
+
+**Print … memory** is a placeholder. It prints "Not implemented".
 
 ---
 
 ## How the code is organised
 
 ```
-ddg_main.py      entry point; clears the terminal, starts the app
-ddg_poly.py      Polyscope layer: AppState, the @operation registry, the callback
-ddg_objects.py   geometry core: the Geometry class and the mathematics
-ps_wrappers.py   thin wrappers over polyscope.imgui, with docstrings
-AuxFunctions.py  timing and memory decorators, file dialog, helpers
+ddg_main.py           entry point; clears the terminal, starts the app
+ddg_poly.py           Polyscope layer: AppState, the @operation registry, the callback
+ps_wrappers.py        thin wrappers over polyscope.imgui, with docstrings
+AuxFunctions.py       timing and memory decorators, file dialog, helpers
+core/
+  ddg_objects.py      the Geometry container: holds a mesh and its derived quantities
+  ddg_math.py         the mathematics: vectorized, pure, no mesh object required
+  ddg_types.py        shared array type aliases
+tests/                headless pytest suite, one module per source layer
+meshes/               sample geometry
 ```
 
-**`ddg_objects.py` imports nothing from `ddg_poly.py`.** The dependency runs one
-way only, so the mathematics can be exercised without a GUI. This is the main
+**Nothing under `core/` imports `ddg_poly.py`.** The dependency runs one way
+only, so the mathematics can be exercised without a GUI. This is the main
 structural decision in the project and the thing most worth preserving.
+
+Inside `core/`, the same split runs once more: `ddg_math.py` holds free
+functions over plain arrays, and `ddg_objects.py` calls them and stores the
+results. The mathematics can therefore be tested without constructing a mesh at
+all, which is how `tests/test_ddg_math.py` is written.
 
 Adding an operation is one decorated function — the button is generated from the
 registry, and the callback needs no edit:
@@ -121,8 +158,11 @@ def _op_my_operation(mesh: Geometry, ps_mesh):
   selector is planned; until then, only `FLOOR` (+Z) is reachable from the GUI.
 - Adjacency structures and face centres are computed on request but nothing
   consumes them yet.
-- Degenerate faces are not detected. Meshes with zero-area triangles will trip
-  the internal assertions rather than being handled gracefully.
+- Degenerate faces are not detected. A zero-area triangle does not crash — it is
+  given a zero normal and zero area — but the angle defect at its corners is
+  meaningless, and nothing flags it. A fully collapsed triangle, with all three
+  corners at the same point, trips the corner-angle assertion in
+  `compute_gaussian_curvature`.
 - `ERR`, the tolerance used for degenerate-vector detection, is an absolute
   constant. It should be derived from mesh scale.
 - Operations mutate the mesh and draw to Polyscope in the same function. Splitting

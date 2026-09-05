@@ -123,8 +123,8 @@ def compute_face_centers(triangle_coordinates: FloatArray) -> FloatArray:
 
     Parameters
     ----------
-    Vertex : numpy.ndarray, shape (F, 3, 3)
-        Per-face triangle_coordinates coordinates, indexed as ``[face, corner, xyz]``
+    triangle_coordinates : numpy.ndarray, shape (F, 3, 3)
+        Per-face vertex coordinates, indexed as ``[face, corner, xyz]``
         (i.e. ``mesh.vertices[mesh.faces]``).
 
     Returns
@@ -167,7 +167,12 @@ def compute_normal_direction(normals: FloatArray,
 
     Notes
     -----
-    
+    ``reference`` is not normalized here. A non-unit reference rescales every
+    dot product, and the angle then reads as ``arccos`` of a value that is no
+    longer a cosine.
+
+    The dot products are clipped to [-1, 1] before ``arccos``, so a normal a
+    hair outside unit length from rounding yields 0 or pi rather than NaN.
     """
 
     dots = np.dot(normals, reference)

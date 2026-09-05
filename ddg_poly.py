@@ -2,9 +2,9 @@
 
 Owns everything the viewer needs: the :class:`AppState` container, the
 ``@operation`` button registry, mesh load/unload/save, and the per-frame
-:func:`callback`. The mathematics lives in ``ddg_objects``, which imports
-nothing from here -- the dependency runs one way only, so the math layer stays
-testable without a GUI.                                  
+:func:`callback`. The mathematics lives in ``core.ddg_objects`` and
+``core.ddg_math``, neither of which imports anything from here -- the
+dependency runs one way only, so the math layer stays testable without a GUI.
 
 Promise: A semantic CAD/geometry system whose mathematical foundation is DDG
 
@@ -191,7 +191,7 @@ class AppState():
     """Single container for all state owned by the Polyscope app layer.
 
     One module-level instance, ``app``, is the single source of truth for the
-    GUI layer; the math layer in ``ddg_objects`` knows nothing about it.
+    GUI layer; the math layer under ``core`` knows nothing about it.
 
     Grouping rule: a **dataclass** when the field names are written as literals
     in source, so Pylance can check them; a **dict** when the keys arrive as
@@ -221,10 +221,10 @@ class AppState():
 
     Notes
     -----
-    These four live here rather than in :class:`UserInterfaceState` by one
+    These fields live here rather than in :class:`UserInterfaceState` by one
     test: *what survives if the GUI is removed and the app is driven from a
-    script?* Meshes, transforms, and capabilities survive; the current
-    selection and the text fields do not.
+    script?* The meshes, the operation registry, and the transforms survive;
+    the current selection and the text fields do not.
 
     Sub-objects must be supplied with ``default_factory``, not as bare
     defaults. A bare default is built once at class-definition time and shared
@@ -411,9 +411,10 @@ def unload_mesh(name: str | None, mesh: Geometry | None) -> None:
 
     Parameters
     ----------
-    name : str
+    name : str or None
         Mesh name. Serves as both the Polyscope structure name and the key
-        into ``app.meshes``.
+        into ``app.meshes``. None only reaches here paired with a None
+        ``mesh``, which returns early.
     mesh : Geometry or None
         The mesh itself. Only tested against None; the removal works entirely
         from ``name``.

@@ -41,6 +41,7 @@ while ddg_objects remains independent of the application layer.
           └─────────┬─────────┘
                     ▼
              Computational Core
+            Numpy / scipy / ...
                     │
                     ▼
            ...Turtles all the
@@ -59,7 +60,6 @@ from importlib import metadata
 from pprint import pprint
 
 ### Custom Imports
-# import ddg_objects as ddg_o
 import ddg_poly as ddgpoly
 import AuxFunctions as aux
 
