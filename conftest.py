@@ -12,7 +12,7 @@ a different rootdir, still fails with ``No module named 'interfaces'``. pytest
 loads the rootdir ``conftest.py`` before it imports anything else, so doing the
 insert here works in all of them.
 
-Delete this file once the project is installed as a real package
+# TODO: Delete this file once the project is installed as a real package
 (``pip install -e .``), which puts the modules on the path properly and makes
 the whole question go away.
 """

@@ -22,11 +22,13 @@ import numpy.typing as npt
 
 import polyscope as ps
 
-import core.ddg_objects as ddg_obj
-from core.ddg_objects import Geometry, FloatArray
+import core.ddg_objects as ddgobj
+from core.ddg_objects import Geometry
+from core.ddg_types import FloatArray
+import core.aux_functions as aux
 # import core.ddg_math as ddgmath
+
 import interfaces.polyscope_app.ps_wrappers as imgui
-import core.AuxFunctions as aux
 
 ## Type Aliases
 # What the @operation registry stores: every button handler takes the working
@@ -35,9 +37,8 @@ import core.AuxFunctions as aux
 Operation = Callable[[Geometry, ps.SurfaceMesh], None]
 
 ## Constants
-TIMED: bool = ddg_obj.TIMED
-MEMORY: bool = ddg_obj.MEMORY
-ERR: float = ddg_obj.ERR
+TIMED: bool = ddgobj.TIMED
+MEMORY: bool = ddgobj.MEMORY
 
 @dataclass(frozen = True)
 class AppSettings():

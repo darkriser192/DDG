@@ -22,8 +22,8 @@ import trimesh
 
 ### Custom Imports
 import core.ddg_math as ddgmath
-from core.ddg_types import FloatArray, IntArray, SparseMatrix
-import core.AuxFunctions as aux
+from core.ddg_types import FloatArray, IntArray, SparseMatrix, ERR_TOL
+import core.aux_functions as aux
 
 class FaceDots(TypedDict):
     """One entry of ``Geometry.face_dots``: the comparison against one reference.
@@ -39,7 +39,6 @@ class FaceDots(TypedDict):
 DEBUG: bool = False # Debug flag to print some items as I code
 TIMED: bool = False # Debug flag to print time estimates of functions
 MEMORY: bool = False # Debug flag for memory probing
-ERR: float = 1e-8 # Defines a global error value for some computations
 
 ### Support Classes
 class Surface():
@@ -279,7 +278,7 @@ class Geometry():
 
     @aux.timed(TIMED)
     @aux.memory(MEMORY)
-    def compute_vertex_defects(self) -> None:
+    def compute_vertex_defects(self, ERR = ERR_TOL) -> None:
         """Compute and store the per-vertex angle defect.
 
         The discrete Gaussian curvature at a vertex: ``2*pi`` minus the sum of
@@ -351,7 +350,7 @@ class Geometry():
                       element_ids: tuple[int,int,int],
                       mode: Literal["vertex", "edge", "face", "all"] = "all") -> None:
         """
-        returns the Star surface combinatorial operator
+        Returns the Star surface combinatorial operator
         """
         #TODO: implement
         match mode:

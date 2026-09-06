@@ -10,20 +10,19 @@ from collections.abc import Sequence
 import numpy as np
 
 ## Custom Imports
-from core.ddg_types import FloatArray, IntArray
-import core.AuxFunctions as aux
+from core.ddg_types import FloatArray, IntArray, ERR_TOL
+import core.aux_functions as aux
 
 # Module Constants
 ### Global Constants
 DEBUG: bool = False # Debug flag to print some items as I code
 TIMED: bool = False # Debug flag to print time estimates of functions
 MEMORY: bool = False # Debug flag for memory probing
-ERR: float = 1e-8 # Defines a global error value for some computations
 
 # Support Functions
 @aux.timed(TIMED)
 @aux.memory(MEMORY)
-def compute_vector_values(vectors: FloatArray) -> tuple[FloatArray, FloatArray]:
+def compute_vector_values(vectors: FloatArray, ERR = ERR_TOL) -> tuple[FloatArray, FloatArray]:
     """
     Compute the magnitude and unit direction of a batch of vectors.
 
@@ -456,7 +455,7 @@ def normalize(minmax: Sequence[float], value: float | FloatArray) -> float | Flo
 
 @aux.timed(TIMED)
 @aux.memory(MEMORY)
-def compute_triangle_ratio(edge_magnitudes: FloatArray) -> FloatArray:
+def compute_triangle_ratio(edge_magnitudes: FloatArray, ERR = ERR_TOL) -> FloatArray:
     """
     Returns the ratio of each tringale's longest/smallest edge
     """
@@ -489,7 +488,6 @@ def compute_triangle_jacobian(triangle_coordinates: FloatArray):
 
 # Main entry point
 if __name__ == "__main__":
-    import pytest
     print("Main Entry Point")
 
     print("Main Exit point")

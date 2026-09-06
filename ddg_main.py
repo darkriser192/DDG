@@ -61,9 +61,9 @@ from pprint import pprint
 
 ### Custom Imports
 import interfaces.polyscope_app.ddg_poly as ddgpoly
-import core.AuxFunctions as aux
+import core.aux_functions as aux
 ### Consts
-CLEAR: bool = True
+CLEAR: bool = False
 
 ### Main Function
 @aux.timed(False)

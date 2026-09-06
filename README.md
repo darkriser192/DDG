@@ -128,7 +128,7 @@ core/
   ddg_objects.py        the Geometry container: holds a mesh and its derived quantities
   ddg_math.py           the mathematics: vectorized, pure, no mesh object required
   ddg_types.py          shared array type aliases
-  AuxFunctions.py       timing and memory decorators, file dialog, helpers
+  aux_functions.py       timing and memory decorators, file dialog, helpers
 interfaces/
   polyscope_app/        named so it cannot shadow the installed `polyscope` package
     ddg_poly.py         AppState, the @operation registry, the per-frame callback
