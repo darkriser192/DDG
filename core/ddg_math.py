@@ -22,7 +22,7 @@ MEMORY: bool = False # Debug flag for memory probing
 # Support Functions
 @aux.timed(TIMED)
 @aux.memory(MEMORY)
-def compute_vector_values(vectors: FloatArray, ERR = ERR_TOL) -> tuple[FloatArray, FloatArray]:
+def compute_vector_values(vectors: FloatArray, err_tol = ERR_TOL) -> tuple[FloatArray, FloatArray]:
     """
     Compute the magnitude and unit direction of a batch of vectors.
 
@@ -47,7 +47,7 @@ def compute_vector_values(vectors: FloatArray, ERR = ERR_TOL) -> tuple[FloatArra
     ``ERR`` is the module-level threshold (Reference document global variables).
     """
     magnitude = np.linalg.norm(vectors, axis=-1)
-    valid_mask = magnitude >= ERR
+    valid_mask = magnitude >= err_tol
     safe_mag = np.where(valid_mask, magnitude, 1.0)
     direction = vectors / safe_mag[..., np.newaxis]
     direction[~valid_mask] = 0.0
@@ -455,7 +455,7 @@ def normalize(minmax: Sequence[float], value: float | FloatArray) -> float | Flo
 
 @aux.timed(TIMED)
 @aux.memory(MEMORY)
-def compute_triangle_ratio(edge_magnitudes: FloatArray, ERR = ERR_TOL) -> FloatArray:
+def compute_triangle_ratio(edge_magnitudes: FloatArray, err_tol = ERR_TOL) -> FloatArray:
     """
     Returns the ratio of each tringale's longest/smallest edge
     """
@@ -464,14 +464,14 @@ def compute_triangle_ratio(edge_magnitudes: FloatArray, ERR = ERR_TOL) -> FloatA
 
     # Degenerate triangles have a zero-length edge. Report 0.0 rather than
     # dividing, matching how :func:`compute_vector_values` handles zero vectors.
-    valid_mask = shortest >= ERR
+    valid_mask = shortest >= err_tol
     ratios = np.where(valid_mask, longest / np.where(valid_mask, shortest, 1.0), 0.0)
 
     return ratios
 
 @aux.timed(TIMED)
 @aux.memory(MEMORY)
-def compute_triangle_jacobian(triangle_coordinates: FloatArray):
+def compute_triangle_jacobian(triangle_coordinates: FloatArray): #TODO: Should this take edges? since those already exist
     """
     Computes the jacobian of each individual triangle
     """
@@ -479,6 +479,7 @@ def compute_triangle_jacobian(triangle_coordinates: FloatArray):
     x2 = triangle_coordinates[:,1,:]
     x3 = triangle_coordinates[:,2,:]
 
+    # TODO: Benefits to sorthing edge vectors in positive winding order?
     u = x2 - x1  # Edge 1 vector
     v = x3 - x1  # Edge 2 vector
 

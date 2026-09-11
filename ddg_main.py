@@ -30,7 +30,7 @@ while ddg_objects remains independent of the application layer.
        │            │            │
        └────────────┼────────────┘
                     │
-         Relationships / Contracts
+        Relationships / Contracts
                     │
           ┌─────────┴─────────┐
           ▼                   ▼
@@ -53,6 +53,7 @@ serve applications beyond this Python/Polyscope implementation.
 References
 ----------
 https://github.com/darkriser192/DDG
+
 """
 ### Imports
 import sys

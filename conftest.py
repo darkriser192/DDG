@@ -1,4 +1,4 @@
-"""Put the repository root on ``sys.path`` before any test is collected.
+""" Put the repository root on ``sys.path`` before any test is collected.
 
 ``core`` and ``interfaces`` are namespace packages: they have no
 ``__init__.py``, so they resolve against ``sys.path`` rather than against the
