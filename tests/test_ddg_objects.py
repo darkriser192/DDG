@@ -14,8 +14,8 @@ import numpy as np
 import pytest
 import trimesh
 
-import core.ddg_math as ddgmath
-from core.ddg_objects import Geometry
+import ddg_toolkit.core.ddg_math as ddgmath
+from ddg_toolkit.core.ddg_objects import Geometry
 
 RABBIT = pathlib.Path(__file__).resolve().parent.parent / "meshes" / "rabbit-low-poly.stl"
 

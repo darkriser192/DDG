@@ -21,9 +21,9 @@ import scipy as sp
 import trimesh
 
 ### Custom Imports
-import core.ddg_math as ddgmath
-from core.ddg_types import FloatArray, IntArray, SparseMatrix, ERR_TOL
-import core.aux_functions as aux
+import ddg_toolkit.core.ddg_math as ddgmath
+from ddg_toolkit.core.ddg_types import FloatArray, IntArray, SparseMatrix, ERR_TOL
+import ddg_toolkit.core.aux_functions as aux
 
 class FaceDots(TypedDict):
     """One entry of ``Geometry.face_dots``: the comparison against one reference.

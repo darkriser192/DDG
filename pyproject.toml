@@ -3,19 +3,19 @@ name = "ddg-toolkit"
 version = "0.0.2"
 requires-python = "== 3.14.*"
 dependencies = [
-    "numpy >= 2.5.2",
-    "numpy-stl >= 4.0.0",
-    "trimesh >= 5.0.0",
-    "scipy >= 1.18.0",
-    "networkx >= 3.6.1",
-    "polyscope >= 2.6.1",
-    "psutil >= 7.2.2",
-    "matplotlib >= 3.11.1",
-    "plotly >= 6.9.0",
-    "cupy >= 14.1.1",
-    "cascadio >= 0.1.1",
-    "eigen >= 0.1.1",
-    "tk >= 0.1.0",
+    "numpy >= 2.5.*",
+    "numpy-stl >= 4.0.*",
+    "trimesh >= 5.0.*",
+    "scipy >= 1.18.*",
+    "networkx >= 3.6.*",
+    "polyscope >= 2.6.*",
+    "psutil >= 7.2.*",
+    "matplotlib >= 3.11.*",
+    "plotly >= 6.9.*",
+    "cupy >= 14.1.*",
+    "cascadio >= 0.1.*",
+    "eigen >= 0.1.*",
+    "tk >= 0.1.*",
 ]
 
 [dependency-groups]

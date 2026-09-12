@@ -13,8 +13,8 @@ import dataclasses
 import numpy as np
 import pytest
 
-import interfaces.polyscope_app.ddg_poly as ddgpoly
-from core.ddg_objects import Geometry
+import ddg_toolkit.interfaces.polyscope_app.ddg_poly as ddgpoly
+from ddg_toolkit.core.ddg_objects import Geometry
 
 ### Fixtures
 @pytest.fixture(name="clean_app")

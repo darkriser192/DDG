@@ -12,7 +12,7 @@ edge and face tables are the ones written into the comments of
 import numpy as np
 import pytest
 
-import core.ddg_math as ddgmath
+import ddg_toolkit.core.ddg_math as ddgmath
 
 ### Reference solid: the unit tetrahedron
 TETRA_VERTICES = np.array([[0.0, 0.0, 0.0],
@@ -29,7 +29,6 @@ TETRA_AREAS = np.array([0.5, 0.5, 0.5, np.sqrt(3.0) / 2.0])
 # Corner sums: 3 x 90 deg at the origin, and 90 + 45 + 45 = 150 deg at each other vertex.
 TETRA_DEFECTS = np.array([2 * np.pi - 3 * (np.pi / 2)]
                          + [2 * np.pi - np.deg2rad(150.0)] * 3)
-
 
 ### compute_vector_values
 def test_vector_values_returns_magnitude_and_unit_direction():

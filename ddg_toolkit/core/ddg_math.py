@@ -10,8 +10,8 @@ from collections.abc import Sequence
 import numpy as np
 
 ## Custom Imports
-from core.ddg_types import FloatArray, IntArray, ERR_TOL
-import core.aux_functions as aux
+from ddg_toolkit.core.ddg_types import FloatArray, IntArray, ERR_TOL
+import ddg_toolkit.core.aux_functions as aux
 
 # Module Constants
 ### Global Constants

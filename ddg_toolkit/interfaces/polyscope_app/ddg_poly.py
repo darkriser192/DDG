@@ -22,13 +22,12 @@ import numpy.typing as npt
 
 import polyscope as ps
 
-import core.ddg_objects as ddgobj
-from core.ddg_objects import Geometry
-from core.ddg_types import FloatArray
-import core.aux_functions as aux
-# import core.ddg_math as ddgmath
+import ddg_toolkit.core.ddg_objects as ddgobj
+from ddg_toolkit.core.ddg_objects import Geometry
+from ddg_toolkit.core.ddg_types import FloatArray
+import ddg_toolkit.core.aux_functions as aux
 
-import interfaces.polyscope_app.ps_wrappers as imgui
+import ddg_toolkit.interfaces.polyscope_app.ps_wrappers as imgui
 
 ## Type Aliases
 # What the @operation registry stores: every button handler takes the working
@@ -783,9 +782,6 @@ def polyscope_app_init(pre_load: str | None = None, default_app: AppState = app)
 # Local testing
 if __name__ == "__main__":
     print("Local excecution protyping and testing")
-
-    returns = polyscope_app_init()
-
-    print(returns)
+    
 
     print("End local excecution prototype and testing")

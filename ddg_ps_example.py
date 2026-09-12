@@ -61,8 +61,8 @@ from importlib import metadata
 from pprint import pprint
 
 ### Custom Imports
-import interfaces.polyscope_app.ddg_poly as ddgpoly
-import core.aux_functions as aux
+import ddg_toolkit.interfaces.polyscope_app.ddg_poly as ddgpoly
+import ddg_toolkit.core.aux_functions as aux
 ### Consts
 CLEAR: bool = False
 
